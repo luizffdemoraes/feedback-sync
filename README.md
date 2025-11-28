@@ -75,3 +75,21 @@ Create your first JPA entity
 Easily start your REST Web Services
 
 [Related guide section...](https://quarkus.io/guides/getting-started-reactive#reactive-jax-rs-resources)
+
+# Limpar cache corrompido (se necessário)
+Stop-Process -Name java -Force -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force .\target\quarkus\
+
+# Compilar (sem testes)
+.\mvnw.cmd -DskipTests clean package
+
+# Modo dev (hot reload) — recomendado
+.\mvnw.cmd quarkus:dev
+
+# Empacotar e executar como jar (produção)
+.\mvnw.cmd package
+java -jar target\quarkus-app\quarkus-run.jar
+
+# Para über-jar
+.\mvnw.cmd package -Dquarkus.package.jar.type=uber-jar
+java -jar target\*runner.jar

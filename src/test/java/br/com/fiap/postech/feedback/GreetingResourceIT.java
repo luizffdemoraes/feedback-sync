@@ -1,4 +1,4 @@
-package br.com.fiap.postech;
+package br.com.fiap.postech.feedback;
 
 import io.quarkus.test.junit.QuarkusIntegrationTest;
 
