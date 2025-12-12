@@ -1,25 +1,186 @@
 package br.com.fiap.postech.feedback.infrastructure.gateways;
 
-
 import br.com.fiap.postech.feedback.domain.entities.Feedback;
 import br.com.fiap.postech.feedback.domain.gateways.FeedbackGateway;
+import com.azure.cosmos.*;
+import com.azure.cosmos.models.*;
+import com.azure.cosmos.util.CosmosPagedIterable;
+import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.time.Instant;
-import java.util.List;
+import java.time.LocalDateTime;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @ApplicationScoped
 public class CosmosFeedbackGatewayImpl implements FeedbackGateway {
 
-    // Inject Cosmos DB client (use Azure SDK or Micronaut/Quarkus integration)
+    @ConfigProperty(name = "azure.cosmos.endpoint", defaultValue = "https://localhost:8081")
+    String cosmosEndpoint;
+
+    @ConfigProperty(name = "azure.cosmos.key", defaultValue = "C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==")
+    String cosmosKey;
+
+    @ConfigProperty(name = "azure.cosmos.database", defaultValue = "feedback-db")
+    String databaseName;
+
+    @ConfigProperty(name = "azure.cosmos.container", defaultValue = "feedbacks")
+    String containerName;
+
+    private CosmosContainer container;
+
+    @PostConstruct
+    public void init() {
+        try {
+            CosmosClient client = new CosmosClientBuilder()
+                    .endpoint(cosmosEndpoint)
+                    .key(cosmosKey)
+                    .buildClient();
+
+            CosmosDatabaseResponse databaseResponse = client.createDatabaseIfNotExists(databaseName);
+            CosmosDatabase database = client.getDatabase(databaseName);
+
+            CosmosContainerProperties containerProperties =
+                    new CosmosContainerProperties(containerName, "/id");
+
+            ThroughputProperties throughputProperties =
+                    ThroughputProperties.createManualThroughput(400);
+
+            CosmosContainerResponse containerResponse = database
+                    .createContainerIfNotExists(containerProperties, throughputProperties);
+
+            this.container = database.getContainer(containerName);
+
+            System.out.println("Cosmos DB conectado: " + databaseName + "/" + containerName);
+
+        } catch (CosmosException e) {
+            System.err.println("Erro ao conectar ao Cosmos DB: " + e.getMessage());
+        }
+    }
+
     @Override
     public void save(Feedback feedback) {
-        // map to document and persist
+        try {
+            if (feedback.getId() == null) {
+                feedback.setId(UUID.randomUUID().toString());
+            }
+
+            if (feedback.getCreatedAt() == null) {
+                feedback.setCreatedAt(LocalDateTime.now());
+            }
+
+            CosmosDocument doc = toDocument(feedback);
+            container.upsertItem(doc);
+
+            System.out.println("Feedback salvo no Cosmos DB: " + feedback.getId());
+
+        } catch (Exception e) {
+            System.err.println("Erro ao salvar feedback: " + e.getMessage());
+            throw new RuntimeException("Falha ao salvar feedback", e);
+        }
     }
 
     @Override
     public List<Feedback> findByPeriod(Instant from, Instant to) {
-        // query cosmos and map back
-        return List.of();
+        try {
+            String query = "SELECT * FROM c " +
+                    "WHERE c.createdAt >= @from AND c.createdAt <= @to " +
+                    "ORDER BY c.createdAt DESC";
+
+            SqlQuerySpec querySpec = new SqlQuerySpec(query);
+            SqlParameter[] parameters = {
+                    new SqlParameter("@from", from.toString()),
+                    new SqlParameter("@to", to.toString())
+            };
+            querySpec.setParameters(Arrays.asList(parameters));
+
+            CosmosPagedIterable<CosmosDocument> response =
+                    container.queryItems(querySpec, new CosmosQueryRequestOptions(), CosmosDocument.class);
+
+            return response.stream()
+                    .map(this::toEntity)
+                    .collect(Collectors.toList());
+
+        } catch (Exception e) {
+            System.err.println("Erro ao buscar feedbacks: " + e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    public Map<String, Object> getWeeklyReportData(Instant startOfWeek, Instant endOfWeek) {
+        List<Feedback> feedbacks = findByPeriod(startOfWeek, endOfWeek);
+
+        double average = feedbacks.stream()
+                .mapToInt(Feedback::getScore)
+                .average()
+                .orElse(0.0);
+
+        Map<String, Long> dailyCount = feedbacks.stream()
+                .collect(Collectors.groupingBy(
+                        f -> f.getCreatedAt()
+                                .toLocalDate()
+                                .toString(),
+                        Collectors.counting()
+                ));
+
+        Map<String, Long> urgencyCount = feedbacks.stream()
+                .collect(Collectors.groupingBy(
+                        Feedback::getUrgency,
+                        Collectors.counting()
+                ));
+
+        Map<String, Object> report = new HashMap<>();
+        report.put("periodo_inicio", startOfWeek.toString());
+        report.put("periodo_fim", endOfWeek.toString());
+        report.put("total_avaliacoes", feedbacks.size());
+        report.put("media_avaliacoes", Math.round(average * 100.0) / 100.0);
+        report.put("avaliacoes_por_dia", dailyCount);
+        report.put("avaliacoes_por_urgencia", urgencyCount);
+        report.put("feedbacks", feedbacks.stream()
+                .map(this::toMap)
+                .collect(Collectors.toList()));
+
+        return report;
+    }
+
+    private CosmosDocument toDocument(Feedback feedback) {
+        CosmosDocument doc = new CosmosDocument();
+        doc.id = feedback.getId();
+        doc.description = feedback.getDescription();
+        doc.score = feedback.getScore();
+        doc.urgency = feedback.getUrgency();
+        doc.createdAt = feedback.getCreatedAt().toString();
+        return doc;
+    }
+
+    private Feedback toEntity(CosmosDocument doc) {
+        Feedback feedback = new Feedback(
+                doc.description,
+                doc.score,
+                doc.urgency
+        );
+        feedback.setId(doc.id);
+        feedback.setCreatedAt(LocalDateTime.parse(doc.createdAt));
+        return feedback;
+    }
+
+    private Map<String, Object> toMap(Feedback feedback) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("id", feedback.getId());
+        map.put("description", feedback.getDescription());
+        map.put("score", feedback.getScore());
+        map.put("urgency", feedback.getUrgency());
+        map.put("createdAt", feedback.getCreatedAt().toString());
+        return map;
+    }
+
+    private static class CosmosDocument {
+        public String id;
+        public String description;
+        public Integer score;
+        public String urgency;
+        public String createdAt;
     }
 }

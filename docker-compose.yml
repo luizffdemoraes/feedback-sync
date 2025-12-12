@@ -1,21 +1,50 @@
+version: '3.9'
+
 services:
-  postgres:
-    image: postgres:15
-    container_name: feedback-postgres
-    environment:
-      POSTGRES_DB: meudb
-      POSTGRES_USER: usuario
-      POSTGRES_PASSWORD: senha
+  # ---------------------------------------------------
+  # Cosmos DB Emulator (Core SQL API)
+  # ---------------------------------------------------
+  cosmosdb:
+    image: mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator
+    container_name: cosmos-emulator
     ports:
-      - "5432:5432"
+      - "8081:8081" # UI and SQL API endpoint
+    environment:
+      AZURE_COSMOS_EMULATOR_IP_ADDRESS_OVERRIDE: "0.0.0.0"
+      AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE: "true"
+    mem_limit: 3g
+    entrypoint: [ "/bin/bash", "-c", "chmod 755 /usr/local/bin/cosmosdb-emulator && /usr/local/bin/cosmosdb-emulator" ]
+
+  # ---------------------------------------------------
+  # Azurite (Blob, Queue, Table)
+  # ---------------------------------------------------
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite
+    container_name: azurite
+    command: >
+      azurite
+      --blobHost 0.0.0.0
+      --queueHost 0.0.0.0
+      --tableHost 0.0.0.0
+    ports:
+      - "10000:10000" # Blob
+      - "10001:10001" # Queue
+      - "10002:10002" # Table
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - feedback-network
+      - azurite_data:/data
+
+  # ---------------------------------------------------
+  # Azure Service Bus Local Emulator (NOVO 2024)
+  # ---------------------------------------------------
+  servicebus:
+    image: mcr.microsoft.com/azure-service-bus/emulator
+    container_name: servicebus-emulator
+    ports:
+      - "5672:5672" # AMQP
+      - "8080:8080" # HTTP Management API
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      SERVICEBUS_EMULATOR__STORAGE__MODE: Memory
 
 volumes:
-  postgres_data:
-
-networks:
-  feedback-network:
-    driver: bridge
+  azurite_data:

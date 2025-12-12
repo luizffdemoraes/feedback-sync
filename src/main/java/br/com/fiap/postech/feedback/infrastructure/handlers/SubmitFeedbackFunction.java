@@ -45,11 +45,11 @@ public class SubmitFeedbackFunction {
             FeedbackResponse result = createFeedbackUseCase.execute(feedbackRequest);
 
             if (feedbackRequest.score() <= 3) {
-                context.getLogger().warning("⚠️ Feedback crítico recebido! Nota: " + feedbackRequest.score());
+                context.getLogger().warning("Feedback crítico recebido! Nota: " + feedbackRequest.score());
                 // disparar evento para notifyAdmin aqui
             }
 
-            context.getLogger().info("✅ Feedback processado com sucesso");
+            context.getLogger().info("Feedback processado com sucesso");
 
             return request.createResponseBuilder(HttpStatus.CREATED)
                     .body("{\"id\": \"" + result.getId() + "\", \"status\": \"recebido\"}")
@@ -59,7 +59,7 @@ public class SubmitFeedbackFunction {
         } catch (IllegalArgumentException e) {
             return createErrorResponse(request, 400, "JSON inválido: " + e.getMessage());
         } catch (Exception e) {
-            context.getLogger().severe("❌ Erro: " + e.getMessage());
+            context.getLogger().severe("Erro: " + e.getMessage());
             return createErrorResponse(request, 500, "Erro interno: " + e.getMessage());
         }
     }

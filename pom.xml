@@ -56,6 +56,26 @@
             <artifactId>azure-functions-java-library</artifactId>
             <version>${azure.functions.version}</version>
         </dependency>
+        <!-- Azure Blob Storage -->
+        <dependency>
+            <groupId>com.azure</groupId>
+            <artifactId>azure-storage-blob</artifactId>
+            <version>12.29.0</version>
+        </dependency>
+
+        <!-- Azure CosmosDB SQL API -->
+        <dependency>
+            <groupId>com.azure</groupId>
+            <artifactId>azure-cosmos</artifactId>
+            <version>4.58.0</version>
+        </dependency>
+
+        <!-- Azure Service Bus Client -->
+        <dependency>
+            <groupId>com.azure</groupId>
+            <artifactId>azure-messaging-servicebus</artifactId>
+            <version>7.17.3</version>
+        </dependency>
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-junit5</artifactId>
