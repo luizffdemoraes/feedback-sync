@@ -199,6 +199,9 @@
         </profile>
         <profile>
             <id>local</id>
+            <properties>
+                <quarkus.profile>local</quarkus.profile>
+            </properties>
         </profile>
     </profiles>
 </project>
