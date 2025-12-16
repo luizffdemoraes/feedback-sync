@@ -4,18 +4,27 @@ package br.com.fiap.postech.feedback.infrastructure.handlers;
 import br.com.fiap.postech.feedback.application.dtos.requests.FeedbackRequest;
 import br.com.fiap.postech.feedback.application.dtos.responses.FeedbackResponse;
 import br.com.fiap.postech.feedback.application.usecases.CreateFeedbackUseCase;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.microsoft.azure.functions.*;
 import com.microsoft.azure.functions.annotation.*;
 
 import jakarta.inject.Inject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Optional;
 
 
 public class SubmitFeedbackFunction {
 
+    private static final Logger logger = LoggerFactory.getLogger(SubmitFeedbackFunction.class);
+
     @Inject
     CreateFeedbackUseCase createFeedbackUseCase;
+
+    @Inject
+    ObjectMapper objectMapper;
 
     @FunctionName("submitFeedback")
     public HttpResponseMessage run(
@@ -26,30 +35,32 @@ public class SubmitFeedbackFunction {
             ) HttpRequestMessage<Optional<String>> request,
             final ExecutionContext context) {
 
-        context.getLogger().info("📨 Recebendo feedback...");
+        logger.info("Recebendo feedback via HTTP trigger");
 
         try {
             String json = request.getBody().orElse(null);
 
             if (json == null || json.isEmpty()) {
+                logger.warn("Corpo da requisição vazio");
                 return createErrorResponse(request, 400, "Corpo da requisição vazio");
             }
 
-            FeedbackRequest feedbackRequest = parseJsonManual(json);
+            FeedbackRequest feedbackRequest = parseJsonWithObjectMapper(json);
 
             // validação usando accessors do record
-            if (feedbackRequest.score() < 0 || feedbackRequest.score() > 10) {
+            if (feedbackRequest.score() == null || feedbackRequest.score() < 0 || feedbackRequest.score() > 10) {
+                logger.warn("Nota inválida: {}", feedbackRequest.score());
                 return createErrorResponse(request, 400, "Nota deve estar entre 0 e 10");
             }
 
             FeedbackResponse result = createFeedbackUseCase.execute(feedbackRequest);
 
             if (feedbackRequest.score() <= 3) {
-                context.getLogger().warning("Feedback crítico recebido! Nota: " + feedbackRequest.score());
+                logger.warn("Feedback crítico recebido! Nota: {}", feedbackRequest.score());
                 // disparar evento para notifyAdmin aqui
             }
 
-            context.getLogger().info("Feedback processado com sucesso");
+            logger.info("Feedback processado com sucesso, id={}", result.getId());
 
             return request.createResponseBuilder(HttpStatus.CREATED)
                     .body("{\"id\": \"" + result.getId() + "\", \"status\": \"recebido\"}")
@@ -57,46 +68,41 @@ public class SubmitFeedbackFunction {
                     .build();
 
         } catch (IllegalArgumentException e) {
+            logger.warn("JSON inválido: {}", e.getMessage());
             return createErrorResponse(request, 400, "JSON inválido: " + e.getMessage());
         } catch (Exception e) {
-            context.getLogger().severe("Erro: " + e.getMessage());
+            logger.error("Erro interno ao processar feedback", e);
             return createErrorResponse(request, 500, "Erro interno: " + e.getMessage());
         }
     }
 
-    // Parse simples: aceita campos em português no payload: descricao, nota, urgencia
-    private FeedbackRequest parseJsonManual(String json) {
-        String descricao = extractValue(json, "descricao");
-        String notaStr = extractValue(json, "nota");
-        String urgencia = extractValue(json, "urgencia"); // opcional
-
-        if (descricao == null || notaStr == null) {
-            throw new IllegalArgumentException("Campos 'descricao' e 'nota' são obrigatórios");
-        }
-
+    // Usa ObjectMapper para suportar campos em inglês e português
+    private FeedbackRequest parseJsonWithObjectMapper(String json) {
         try {
-            int nota = Integer.parseInt(notaStr);
-            return new FeedbackRequest(descricao, nota, urgencia);
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("'nota' deve ser um número");
-        }
-    }
+            JsonNode node = objectMapper.readTree(json);
 
-    private String extractValue(String json, String field) {
-        String patternString = "\"" + field + "\"\\s*:\\s*\"([^\"]+)\"";
-        java.util.regex.Pattern p = java.util.regex.Pattern.compile(patternString);
-        java.util.regex.Matcher m = p.matcher(json);
-        if (m.find()) {
-            return m.group(1);
+            String description = null;
+            if (node.hasNonNull("description")) description = node.get("description").asText();
+            else if (node.hasNonNull("descricao")) description = node.get("descricao").asText();
+
+            Integer score = null;
+            if (node.hasNonNull("score")) score = node.get("score").asInt();
+            else if (node.hasNonNull("nota")) score = node.get("nota").asInt();
+
+            String urgency = null;
+            if (node.hasNonNull("urgency")) urgency = node.get("urgency").asText();
+            else if (node.hasNonNull("urgencia")) urgency = node.get("urgencia").asText();
+
+            if (description == null || score == null) {
+                throw new IllegalArgumentException("Campos 'description/descricao' e 'score/nota' são obrigatórios");
+            }
+
+            return new FeedbackRequest(description, score, urgency);
+        } catch (IllegalArgumentException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Erro ao parsear JSON", e);
         }
-        // número sem aspas
-        String patternNumber = "\"" + field + "\"\\s*:\\s*([0-9]+)";
-        p = java.util.regex.Pattern.compile(patternNumber);
-        m = p.matcher(json);
-        if (m.find()) {
-            return m.group(1);
-        }
-        return null;
     }
 
     private HttpResponseMessage createErrorResponse(

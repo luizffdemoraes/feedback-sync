@@ -22,8 +22,8 @@ public class CreateFeedbackUseCaseImpl implements CreateFeedbackUseCase {
     @Override
     public FeedbackResponse execute(FeedbackRequest request) {
         // basic validation
-        if (request.score == null) throw new IllegalArgumentException("score is required");
-        Feedback feedback = new Feedback(request.description, request.score, request.urgency == null ? "LOW" : request.urgency);
+        if (request.score() == null) throw new IllegalArgumentException("score is required");
+        Feedback feedback = new Feedback(request.description(), request.score(), request.urgency() == null ? "LOW" : request.urgency());
         feedbackGateway.save(feedback);
         if (feedback.getScore() <= CRITICAL_THRESHOLD) {
             notificationGateway.publishCritical(feedback);

@@ -8,14 +8,19 @@ import com.azure.cosmos.util.CosmosPagedIterable;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
+
 @ApplicationScoped
 public class CosmosFeedbackGatewayImpl implements FeedbackGateway {
+
+    private static final Logger logger = LoggerFactory.getLogger(CosmosFeedbackGatewayImpl.class);
 
     @ConfigProperty(name = "azure.cosmos.endpoint", defaultValue = "https://localhost:8081")
     String cosmosEndpoint;
@@ -53,10 +58,10 @@ public class CosmosFeedbackGatewayImpl implements FeedbackGateway {
 
             this.container = database.getContainer(containerName);
 
-            System.out.println("Cosmos DB conectado: " + databaseName + "/" + containerName);
+            logger.info("Cosmos DB conectado: {}/{}", databaseName, containerName);
 
         } catch (CosmosException e) {
-            System.err.println("Erro ao conectar ao Cosmos DB: " + e.getMessage());
+            logger.error("Erro ao conectar ao Cosmos DB: {}", e.getMessage(), e);
         }
     }
 
@@ -74,10 +79,10 @@ public class CosmosFeedbackGatewayImpl implements FeedbackGateway {
             CosmosDocument doc = toDocument(feedback);
             container.upsertItem(doc);
 
-            System.out.println("Feedback salvo no Cosmos DB: " + feedback.getId());
+            logger.info("Feedback salvo no Cosmos DB: id={}", feedback.getId());
 
         } catch (Exception e) {
-            System.err.println("Erro ao salvar feedback: " + e.getMessage());
+            logger.error("Erro ao salvar feedback: {}", e.getMessage(), e);
             throw new RuntimeException("Falha ao salvar feedback", e);
         }
     }
@@ -104,7 +109,7 @@ public class CosmosFeedbackGatewayImpl implements FeedbackGateway {
                     .collect(Collectors.toList());
 
         } catch (Exception e) {
-            System.err.println("Erro ao buscar feedbacks: " + e.getMessage());
+            logger.error("Erro ao buscar feedbacks: {}", e.getMessage(), e);
             return Collections.emptyList();
         }
     }
@@ -184,3 +189,4 @@ public class CosmosFeedbackGatewayImpl implements FeedbackGateway {
         public String createdAt;
     }
 }
+

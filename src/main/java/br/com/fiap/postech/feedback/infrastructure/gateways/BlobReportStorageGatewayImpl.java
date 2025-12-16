@@ -12,6 +12,8 @@ import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.io.ByteArrayInputStream;
@@ -19,8 +21,11 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 
+
 @ApplicationScoped
 public class BlobReportStorageGatewayImpl implements ReportStorageGateway {
+
+    private static final Logger logger = LoggerFactory.getLogger(BlobReportStorageGatewayImpl.class);
 
     @ConfigProperty(name = "azure.storage.connection-string")
     String storageConnectionString;
@@ -43,6 +48,9 @@ public class BlobReportStorageGatewayImpl implements ReportStorageGateway {
 
         if (!containerClient.exists()) {
             containerClient.create();
+            logger.info("Container criado: {}", containerName);
+        } else {
+            logger.info("Container existente: {}", containerName);
         }
     }
 
@@ -55,8 +63,10 @@ public class BlobReportStorageGatewayImpl implements ReportStorageGateway {
             blobClient.upload(new ByteArrayInputStream(data), data.length, true);
             blobClient.setHttpHeaders(new BlobHttpHeaders().setContentType("application/json"));
 
+            logger.info("Relatório salvo no blob: {}", fileName);
             return fileName;
         } catch (Exception e) {
+            logger.error("Erro ao salvar relatório: {}", e.getMessage(), e);
             throw new RuntimeException("Erro ao salvar relatório", e);
         }
     }
@@ -75,6 +85,7 @@ public class BlobReportStorageGatewayImpl implements ReportStorageGateway {
 
             return saveReport(fileName, jsonReport);
         } catch (Exception e) {
+            logger.error("Erro ao salvar relatório semanal: {}", e.getMessage(), e);
             throw new RuntimeException("Erro ao salvar relatório semanal", e);
         }
     }
