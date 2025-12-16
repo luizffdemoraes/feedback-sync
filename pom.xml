@@ -86,6 +86,10 @@
             <artifactId>rest-assured</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-jackson</artifactId>
+        </dependency>
     </dependencies>
 
     <build>
@@ -150,13 +154,25 @@
                 <groupId>com.microsoft.azure</groupId>
                 <artifactId>azure-functions-maven-plugin</artifactId>
                 <version>1.30.0</version>
+
+                <!-- Vincula o goal package à fase package do Maven -->
+                <executions>
+                    <execution>
+                        <id>package-functions</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>package</goal>
+                        </goals>
+                    </execution>
+                </executions>
+
                 <configuration>
                     <resourceGroup>java-functions-group</resourceGroup>
                     <appName>feedback-service-app</appName>
                     <region>brazilsouth</region>
                     <runtime>
                         <os>linux</os>
-                        <javaVersion>17</javaVersion>
+                        <javaVersion>21</javaVersion>
                     </runtime>
                     <appSettings>
                         <property>
@@ -182,6 +198,9 @@
                 <skipITs>false</skipITs>
                 <quarkus.native.enabled>true</quarkus.native.enabled>
             </properties>
+        </profile>
+        <profile>
+            <id>local</id>
         </profile>
     </profiles>
 </project>
