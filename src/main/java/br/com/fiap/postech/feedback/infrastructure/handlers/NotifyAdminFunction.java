@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.microsoft.azure.functions.*;
 import com.microsoft.azure.functions.annotation.*;
 
+import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,6 +22,7 @@ import java.time.format.DateTimeFormatter;
  * 
  * Responsabilidade única: Processar eventos críticos e notificar administradores
  */
+@ApplicationScoped
 public class NotifyAdminFunction {
 
     private static final Logger logger = LoggerFactory.getLogger(NotifyAdminFunction.class);

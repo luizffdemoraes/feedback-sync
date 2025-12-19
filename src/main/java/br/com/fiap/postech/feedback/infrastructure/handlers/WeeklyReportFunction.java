@@ -4,6 +4,7 @@ import br.com.fiap.postech.feedback.application.usecases.GenerateWeeklyReportUse
 import com.microsoft.azure.functions.*;
 import com.microsoft.azure.functions.annotation.*;
 
+import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,6 +16,7 @@ import org.slf4j.LoggerFactory;
  * 
  * Responsabilidade única: Agendar e disparar a geração de relatórios semanais
  */
+@ApplicationScoped
 public class WeeklyReportFunction {
 
     private static final Logger logger = LoggerFactory.getLogger(WeeklyReportFunction.class);
