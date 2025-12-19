@@ -1,5 +1,38 @@
 # feedback-sync
 
+Sistema de Feedback Serverless usando Azure Functions, Quarkus e Clean Architecture.
+
+## 🚀 Validação Local com Docker Compose
+
+Para validar a implementação localmente, consulte o guia completo: **[VALIDACAO_LOCAL.md](./VALIDACAO_LOCAL.md)**
+
+### Início Rápido
+
+1. **Inicie os serviços Azure (Cosmos DB, Azurite, Service Bus)**:
+   ```bash
+   # Windows
+   .\scripts\start-local.ps1
+   
+   # Linux/Mac
+   ./scripts/start-local.sh
+   ```
+
+2. **Execute a aplicação**:
+   ```bash
+   .\mvnw.cmd quarkus:dev -Dquarkus.profile=local
+   ```
+
+3. **Teste a API**:
+   ```bash
+   # Windows
+   .\scripts\test-api.ps1
+   
+   # Linux/Mac
+   ./scripts/test-api.sh
+   ```
+
+---
+
 This project uses Quarkus, the Supersonic Subatomic Java Framework.
 
 If you want to learn more about Quarkus, please visit its website: <https://quarkus.io/>.
