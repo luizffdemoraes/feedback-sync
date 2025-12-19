@@ -24,16 +24,20 @@ public class ServiceBusNotificationGatewayImpl implements NotificationGateway {
 
     private static final Logger logger = LoggerFactory.getLogger(ServiceBusNotificationGatewayImpl.class);
 
-    @ConfigProperty(name = "azure.servicebus.connection-string")
-    String connectionString;
-
-    @ConfigProperty(name = "azure.servicebus.topic-name")
-    String topicName;
+    private final String connectionString;
+    private final String topicName;
+    private final ObjectMapper objectMapper;
+    private ServiceBusSenderClient senderClient;
 
     @Inject
-    ObjectMapper objectMapper;
-
-    private ServiceBusSenderClient senderClient;
+    public ServiceBusNotificationGatewayImpl(
+            @ConfigProperty(name = "azure.servicebus.connection-string") String connectionString,
+            @ConfigProperty(name = "azure.servicebus.topic-name") String topicName,
+            ObjectMapper objectMapper) {
+        this.connectionString = connectionString;
+        this.topicName = topicName;
+        this.objectMapper = objectMapper;
+    }
 
     @PostConstruct
     void init() {
@@ -46,7 +50,6 @@ public class ServiceBusNotificationGatewayImpl implements NotificationGateway {
 
             logger.info("Service Bus conectado ao tópico: {}", topicName);
         } catch (Exception e) {
-            logger.error("Erro ao conectar ao Service Bus: {}", e.getMessage(), e);
             throw new NotificationException("Falha ao conectar ao Service Bus", e);
         }
     }
@@ -65,7 +68,6 @@ public class ServiceBusNotificationGatewayImpl implements NotificationGateway {
             logger.info("Mensagem crítica publicada no Service Bus. Tópico: {}", topicName);
 
         } catch (Exception e) {
-            logger.error("Erro ao publicar no Service Bus: {}", e.getMessage(), e);
             throw new NotificationException("Falha ao publicar mensagem crítica", e);
         }
     }
@@ -82,7 +84,6 @@ public class ServiceBusNotificationGatewayImpl implements NotificationGateway {
             logger.info("Notificação enviada ao admin via Service Bus");
 
         } catch (Exception e) {
-            logger.error("Erro ao enviar notificação: {}", e.getMessage(), e);
             throw new NotificationException("Falha ao enviar notificação ao admin", e);
         }
     }

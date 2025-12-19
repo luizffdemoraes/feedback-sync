@@ -1,5 +1,6 @@
 package br.com.fiap.postech.feedback.infrastructure.gateways;
 
+import br.com.fiap.postech.feedback.domain.exceptions.FeedbackPersistenceException;
 import br.com.fiap.postech.feedback.domain.gateways.ReportStorageGateway;
 import com.azure.storage.blob.BlobClient;
 import com.azure.storage.blob.BlobContainerClient;
@@ -27,16 +28,20 @@ public class BlobReportStorageGatewayImpl implements ReportStorageGateway {
 
     private static final Logger logger = LoggerFactory.getLogger(BlobReportStorageGatewayImpl.class);
 
-    @ConfigProperty(name = "azure.storage.connection-string")
-    String storageConnectionString;
-
-    @ConfigProperty(name = "azure.storage.container-name", defaultValue = "weekly-reports")
-    String containerName;
+    private final String storageConnectionString;
+    private final String containerName;
+    private final ObjectMapper objectMapper;
+    private BlobContainerClient containerClient;
 
     @Inject
-    ObjectMapper objectMapper;
-
-    private BlobContainerClient containerClient;
+    public BlobReportStorageGatewayImpl(
+            @ConfigProperty(name = "azure.storage.connection-string") String storageConnectionString,
+            @ConfigProperty(name = "azure.storage.container-name", defaultValue = "weekly-reports") String containerName,
+            ObjectMapper objectMapper) {
+        this.storageConnectionString = storageConnectionString;
+        this.containerName = containerName;
+        this.objectMapper = objectMapper;
+    }
 
     @PostConstruct
     void init() {
@@ -66,8 +71,7 @@ public class BlobReportStorageGatewayImpl implements ReportStorageGateway {
             logger.info("Relatório salvo no blob: {}", fileName);
             return fileName;
         } catch (Exception e) {
-            logger.error("Erro ao salvar relatório: {}", e.getMessage(), e);
-            throw new RuntimeException("Erro ao salvar relatório", e);
+            throw new FeedbackPersistenceException("Falha ao salvar relatório no Blob Storage", e);
         }
     }
 
@@ -85,8 +89,7 @@ public class BlobReportStorageGatewayImpl implements ReportStorageGateway {
 
             return saveReport(fileName, jsonReport);
         } catch (Exception e) {
-            logger.error("Erro ao salvar relatório semanal: {}", e.getMessage(), e);
-            throw new RuntimeException("Erro ao salvar relatório semanal", e);
+            throw new FeedbackPersistenceException("Falha ao salvar relatório semanal no Blob Storage", e);
         }
     }
 }

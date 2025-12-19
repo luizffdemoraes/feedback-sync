@@ -1,4 +1,4 @@
-package br.com.fiap.postech.feedback.application.services;
+package br.com.fiap.postech.feedback.infrastructure.mappers;
 
 import br.com.fiap.postech.feedback.application.dtos.requests.FeedbackRequest;
 import br.com.fiap.postech.feedback.domain.exceptions.FeedbackDomainException;
@@ -6,20 +6,22 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
- * Serviço responsável por fazer o parsing de JSON para FeedbackRequest.
- * Extrai a lógica de parsing do handler, seguindo Single Responsibility Principle.
+ * Mapper responsável por converter JSON HTTP para FeedbackRequest.
+ * 
+ * Responsabilidade única: Parsing de JSON HTTP (específico de infraestrutura).
+ * Segue Clean Architecture: parsing HTTP fica na camada de infraestrutura.
  */
 @ApplicationScoped
-public class FeedbackRequestParser {
+public class FeedbackRequestMapper {
 
-    private static final Logger logger = LoggerFactory.getLogger(FeedbackRequestParser.class);
+    private final ObjectMapper objectMapper;
 
     @Inject
-    ObjectMapper objectMapper;
+    public FeedbackRequestMapper(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
 
     /**
      * Faz o parsing de uma string JSON para FeedbackRequest.
@@ -29,7 +31,7 @@ public class FeedbackRequestParser {
      * @return FeedbackRequest parseado e validado
      * @throws FeedbackDomainException se o JSON for inválido ou campos obrigatórios estiverem ausentes
      */
-    public FeedbackRequest parse(String json) {
+    public FeedbackRequest toRequest(String json) {
         if (json == null || json.isBlank()) {
             throw new FeedbackDomainException("JSON não pode ser nulo ou vazio");
         }
@@ -46,7 +48,6 @@ public class FeedbackRequestParser {
         } catch (FeedbackDomainException e) {
             throw e;
         } catch (Exception e) {
-            logger.error("Erro ao parsear JSON: {}", e.getMessage(), e);
             throw new FeedbackDomainException("Erro ao parsear JSON: " + e.getMessage(), e);
         }
     }

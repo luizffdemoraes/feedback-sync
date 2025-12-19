@@ -2,8 +2,8 @@ package br.com.fiap.postech.feedback.infrastructure.handlers;
 
 import br.com.fiap.postech.feedback.application.dtos.requests.FeedbackRequest;
 import br.com.fiap.postech.feedback.application.dtos.responses.FeedbackResponse;
-import br.com.fiap.postech.feedback.application.services.FeedbackRequestParser;
 import br.com.fiap.postech.feedback.application.usecases.CreateFeedbackUseCase;
+import br.com.fiap.postech.feedback.infrastructure.mappers.FeedbackRequestMapper;
 import br.com.fiap.postech.feedback.domain.exceptions.FeedbackDomainException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.microsoft.azure.functions.*;
@@ -24,14 +24,19 @@ public class SubmitFeedbackFunction {
 
     private static final Logger logger = LoggerFactory.getLogger(SubmitFeedbackFunction.class);
 
-    @Inject
-    CreateFeedbackUseCase createFeedbackUseCase;
+    private final CreateFeedbackUseCase createFeedbackUseCase;
+    private final FeedbackRequestMapper requestMapper;
+    private final ObjectMapper objectMapper;
 
     @Inject
-    FeedbackRequestParser requestParser;
-
-    @Inject
-    ObjectMapper objectMapper;
+    public SubmitFeedbackFunction(
+            CreateFeedbackUseCase createFeedbackUseCase,
+            FeedbackRequestMapper requestMapper,
+            ObjectMapper objectMapper) {
+        this.createFeedbackUseCase = createFeedbackUseCase;
+        this.requestMapper = requestMapper;
+        this.objectMapper = objectMapper;
+    }
 
     @FunctionName("submitFeedback")
     public HttpResponseMessage run(
@@ -52,8 +57,8 @@ public class SubmitFeedbackFunction {
                 return createErrorResponse(request, 400, "Corpo da requisição vazio");
             }
 
-            // Usa serviço dedicado para parsing (Single Responsibility)
-            FeedbackRequest feedbackRequest = requestParser.parse(json);
+            // Usa mapper de infraestrutura para parsing HTTP/JSON
+            FeedbackRequest feedbackRequest = requestMapper.toRequest(json);
 
             // Validação de negócio delegada ao use case (Score Value Object valida internamente)
             FeedbackResponse result = createFeedbackUseCase.execute(feedbackRequest);

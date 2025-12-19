@@ -25,11 +25,16 @@ public class NotifyAdminFunction {
 
     private static final Logger logger = LoggerFactory.getLogger(NotifyAdminFunction.class);
 
-    @Inject
-    NotificationGateway notificationGateway;
+    private final NotificationGateway notificationGateway;
+    private final ObjectMapper objectMapper;
 
     @Inject
-    ObjectMapper objectMapper;
+    public NotifyAdminFunction(
+            NotificationGateway notificationGateway,
+            ObjectMapper objectMapper) {
+        this.notificationGateway = notificationGateway;
+        this.objectMapper = objectMapper;
+    }
 
     private ObjectMapper createFeedbackObjectMapper() {
         ObjectMapper mapper = objectMapper.copy();
@@ -70,7 +75,6 @@ public class NotifyAdminFunction {
             logger.info("Notificação enviada ao administrador com sucesso");
 
         } catch (Exception e) {
-            logger.error("Erro ao processar mensagem crítica: {}", e.getMessage(), e);
             throw new NotificationException("Falha ao processar notificação crítica", e);
         }
     }

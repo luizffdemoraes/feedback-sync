@@ -3,10 +3,12 @@ package br.com.fiap.postech.feedback.infrastructure.gateways;
 import br.com.fiap.postech.feedback.domain.entities.Feedback;
 import br.com.fiap.postech.feedback.domain.exceptions.FeedbackPersistenceException;
 import br.com.fiap.postech.feedback.domain.gateways.FeedbackGateway;
+import br.com.fiap.postech.feedback.infrastructure.mappers.CosmosFeedbackMapper;
 import com.azure.cosmos.*;
 import com.azure.cosmos.models.*;
 import com.azure.cosmos.util.CosmosPagedIterable;
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.slf4j.Logger;
@@ -15,9 +17,12 @@ import org.slf4j.LoggerFactory;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.stream.Collectors;
 
-
+/**
+ * Implementação do gateway de feedback usando Azure Cosmos DB.
+ * 
+ * Responsabilidade: Persistência e recuperação de feedbacks do Cosmos DB.
+ */
 @ApplicationScoped
 public class CosmosFeedbackGatewayImpl implements FeedbackGateway {
 
@@ -35,18 +40,19 @@ public class CosmosFeedbackGatewayImpl implements FeedbackGateway {
     @ConfigProperty(name = "azure.cosmos.container", defaultValue = "feedbacks")
     String containerName;
 
+    private CosmosClient cosmosClient;
     private CosmosContainer container;
 
     @PostConstruct
     public void init() {
         try {
-            CosmosClient client = new CosmosClientBuilder()
+            this.cosmosClient = new CosmosClientBuilder()
                     .endpoint(cosmosEndpoint)
                     .key(cosmosKey)
                     .buildClient();
 
-            CosmosDatabaseResponse databaseResponse = client.createDatabaseIfNotExists(databaseName);
-            CosmosDatabase database = client.getDatabase(databaseName);
+            cosmosClient.createDatabaseIfNotExists(databaseName);
+            CosmosDatabase database = cosmosClient.getDatabase(databaseName);
 
             CosmosContainerProperties containerProperties =
                     new CosmosContainerProperties(containerName, "/id");
@@ -54,20 +60,34 @@ public class CosmosFeedbackGatewayImpl implements FeedbackGateway {
             ThroughputProperties throughputProperties =
                     ThroughputProperties.createManualThroughput(400);
 
-            CosmosContainerResponse containerResponse = database
-                    .createContainerIfNotExists(containerProperties, throughputProperties);
+            database.createContainerIfNotExists(containerProperties, throughputProperties);
 
             this.container = database.getContainer(containerName);
 
             logger.info("Cosmos DB conectado: {}/{}", databaseName, containerName);
 
         } catch (CosmosException e) {
-            logger.error("Erro ao conectar ao Cosmos DB: {}", e.getMessage(), e);
+            throw new FeedbackPersistenceException(
+                String.format("Falha ao conectar ao Cosmos DB: %s", e.getMessage()), e);
+        }
+    }
+
+    @PreDestroy
+    public void cleanup() {
+        if (cosmosClient != null) {
+            try {
+                cosmosClient.close();
+                logger.info("Cosmos DB desconectado");
+            } catch (Exception e) {
+                logger.warn("Erro ao fechar conexão do Cosmos DB: {}", e.getMessage());
+            }
         }
     }
 
     @Override
     public void save(Feedback feedback) {
+        validateContainer();
+        
         try {
             if (feedback.getId() == null) {
                 feedback.setId(UUID.randomUUID().toString());
@@ -77,19 +97,20 @@ public class CosmosFeedbackGatewayImpl implements FeedbackGateway {
                 feedback.setCreatedAt(LocalDateTime.now());
             }
 
-            CosmosDocument doc = toDocument(feedback);
-            container.upsertItem(doc);
+            Map<String, Object> document = CosmosFeedbackMapper.toDocument(feedback);
+            container.upsertItem(document);
 
             logger.info("Feedback salvo no Cosmos DB: id={}", feedback.getId());
 
         } catch (Exception e) {
-            logger.error("Erro ao salvar feedback: {}", e.getMessage(), e);
             throw new FeedbackPersistenceException("Falha ao salvar feedback no Cosmos DB", e);
         }
     }
 
     @Override
     public List<Feedback> findByPeriod(Instant from, Instant to) {
+        validateContainer();
+        
         try {
             // Converte Instant para LocalDateTime para comparar com o formato salvo
             LocalDateTime fromDateTime = LocalDateTime.ofInstant(from, java.time.ZoneId.systemDefault());
@@ -106,92 +127,31 @@ public class CosmosFeedbackGatewayImpl implements FeedbackGateway {
             };
             querySpec.setParameters(Arrays.asList(parameters));
 
-            CosmosPagedIterable<CosmosDocument> response =
-                    container.queryItems(querySpec, new CosmosQueryRequestOptions(), CosmosDocument.class);
+            @SuppressWarnings("unchecked")
+            CosmosPagedIterable<Map<String, Object>> response =
+                    (CosmosPagedIterable<Map<String, Object>>) (CosmosPagedIterable<?>) 
+                    container.queryItems(querySpec, new CosmosQueryRequestOptions(), Map.class);
 
             return response.stream()
-                    .map(this::toEntity)
-                    .collect(Collectors.toList());
+                    .map(CosmosFeedbackMapper::toEntity)
+                    .toList();
 
         } catch (Exception e) {
-            logger.error("Erro ao buscar feedbacks: {}", e.getMessage(), e);
-            return Collections.emptyList();
+            throw new FeedbackPersistenceException("Falha ao buscar feedbacks do período", e);
         }
     }
 
-    public Map<String, Object> getWeeklyReportData(Instant startOfWeek, Instant endOfWeek) {
-        List<Feedback> feedbacks = findByPeriod(startOfWeek, endOfWeek);
-
-        double average = feedbacks.stream()
-                .mapToInt(f -> f.getScore().getValue())
-                .average()
-                .orElse(0.0);
-
-        Map<String, Long> dailyCount = feedbacks.stream()
-                .collect(Collectors.groupingBy(
-                        f -> f.getCreatedAt()
-                                .toLocalDate()
-                                .toString(),
-                        Collectors.counting()
-                ));
-
-        Map<String, Long> urgencyCount = feedbacks.stream()
-                .collect(Collectors.groupingBy(
-                        f -> f.getUrgency().getValue(),
-                        Collectors.counting()
-                ));
-
-        Map<String, Object> report = new HashMap<>();
-        report.put("periodo_inicio", startOfWeek.toString());
-        report.put("periodo_fim", endOfWeek.toString());
-        report.put("total_avaliacoes", feedbacks.size());
-        report.put("media_avaliacoes", Math.round(average * 100.0) / 100.0);
-        report.put("avaliacoes_por_dia", dailyCount);
-        report.put("avaliacoes_por_urgencia", urgencyCount);
-        report.put("feedbacks", feedbacks.stream()
-                .map(this::toMap)
-                .collect(Collectors.toList()));
-
-        return report;
+    /**
+     * Valida se o container está inicializado.
+     * 
+     * @throws FeedbackPersistenceException se o container não estiver inicializado
+     */
+    private void validateContainer() {
+        if (container == null) {
+            throw new FeedbackPersistenceException(
+                "Cosmos DB container não foi inicializado. Verifique a conexão.");
+        }
     }
 
-    private CosmosDocument toDocument(Feedback feedback) {
-        CosmosDocument doc = new CosmosDocument();
-        doc.id = feedback.getId();
-        doc.description = feedback.getDescription();
-        doc.score = feedback.getScore().getValue();
-        doc.urgency = feedback.getUrgency().getValue();
-        doc.createdAt = feedback.getCreatedAt().toString();
-        return doc;
-    }
-
-    private Feedback toEntity(CosmosDocument doc) {
-        // Usa método de reconstrução para manter imutabilidade
-        return Feedback.reconstruct(
-            doc.id,
-            doc.description,
-            doc.score,
-            doc.urgency != null ? doc.urgency : "LOW",
-            LocalDateTime.parse(doc.createdAt)
-        );
-    }
-
-    private Map<String, Object> toMap(Feedback feedback) {
-        Map<String, Object> map = new HashMap<>();
-        map.put("id", feedback.getId());
-        map.put("description", feedback.getDescription());
-        map.put("score", feedback.getScore().getValue());
-        map.put("urgency", feedback.getUrgency().getValue());
-        map.put("createdAt", feedback.getCreatedAt().toString());
-        return map;
-    }
-
-    private static class CosmosDocument {
-        public String id;
-        public String description;
-        public Integer score;
-        public String urgency;
-        public String createdAt;
-    }
 }
 

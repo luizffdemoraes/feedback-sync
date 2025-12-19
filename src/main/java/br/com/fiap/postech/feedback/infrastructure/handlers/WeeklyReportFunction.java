@@ -19,8 +19,12 @@ public class WeeklyReportFunction {
 
     private static final Logger logger = LoggerFactory.getLogger(WeeklyReportFunction.class);
 
+    private final GenerateWeeklyReportUseCase generateWeeklyReportUseCase;
+
     @Inject
-    GenerateWeeklyReportUseCase generateWeeklyReportUseCase;
+    public WeeklyReportFunction(GenerateWeeklyReportUseCase generateWeeklyReportUseCase) {
+        this.generateWeeklyReportUseCase = generateWeeklyReportUseCase;
+    }
 
     @FunctionName("weeklyReport")
     public void run(
@@ -42,7 +46,6 @@ public class WeeklyReportFunction {
             logger.info("  - URL do relatório: {}", report.getReportUrl());
 
         } catch (Exception e) {
-            logger.error("Erro ao gerar relatório semanal: {}", e.getMessage(), e);
             throw new RuntimeException("Falha ao gerar relatório semanal", e);
         }
     }

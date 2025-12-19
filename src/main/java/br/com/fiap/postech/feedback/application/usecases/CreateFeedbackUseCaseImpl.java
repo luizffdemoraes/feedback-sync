@@ -27,11 +27,16 @@ public class CreateFeedbackUseCaseImpl implements CreateFeedbackUseCase {
 
     private static final Logger logger = LoggerFactory.getLogger(CreateFeedbackUseCaseImpl.class);
 
-    @Inject
-    FeedbackGateway feedbackGateway;
+    private final FeedbackGateway feedbackGateway;
+    private final NotificationGateway notificationGateway;
 
     @Inject
-    NotificationGateway notificationGateway;
+    public CreateFeedbackUseCaseImpl(
+            FeedbackGateway feedbackGateway,
+            NotificationGateway notificationGateway) {
+        this.feedbackGateway = feedbackGateway;
+        this.notificationGateway = notificationGateway;
+    }
 
     @Override
     public FeedbackResponse execute(FeedbackRequest request) {

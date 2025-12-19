@@ -26,11 +26,16 @@ public class GenerateWeeklyReportUseCaseImpl implements GenerateWeeklyReportUseC
 
     private static final Logger logger = LoggerFactory.getLogger(GenerateWeeklyReportUseCaseImpl.class);
 
-    @Inject
-    FeedbackGateway feedbackGateway;
+    private final FeedbackGateway feedbackGateway;
+    private final ReportStorageGateway reportStorageGateway;
 
     @Inject
-    ReportStorageGateway reportStorageGateway;
+    public GenerateWeeklyReportUseCaseImpl(
+            FeedbackGateway feedbackGateway,
+            ReportStorageGateway reportStorageGateway) {
+        this.feedbackGateway = feedbackGateway;
+        this.reportStorageGateway = reportStorageGateway;
+    }
 
     @Override
     public WeeklyReportResponse execute() {
