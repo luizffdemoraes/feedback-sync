@@ -4,11 +4,71 @@
 Write-Host "🚀 Iniciando ambiente local com Docker Compose..." -ForegroundColor Cyan
 
 # Verifica se o Docker está rodando
-try {
-    docker info | Out-Null
-} catch {
-    Write-Host "❌ Docker não está rodando. Por favor, inicie o Docker Desktop." -ForegroundColor Red
-    exit 1
+Write-Host "🔍 Verificando se o Docker está rodando..." -ForegroundColor Cyan
+
+$maxRetries = 3
+$retryCount = 0
+$dockerReady = $false
+
+while ($retryCount -lt $maxRetries -and -not $dockerReady) {
+    try {
+        $dockerInfo = docker info 2>&1 | Out-String
+        if ($LASTEXITCODE -eq 0) {
+            $dockerReady = $true
+            Write-Host "✅ Docker está rodando" -ForegroundColor Green
+        } else {
+            throw "Docker não está acessível"
+        }
+    } catch {
+        $retryCount++
+        if ($retryCount -lt $maxRetries) {
+            Write-Host "⚠️  Docker não está acessível. Tentativa $retryCount/$maxRetries..." -ForegroundColor Yellow
+            
+            # Tenta encontrar e iniciar o Docker Desktop
+            $dockerPaths = @(
+                "C:\Program Files\Docker\Docker\Docker Desktop.exe",
+                "${env:ProgramFiles}\Docker\Docker\Docker Desktop.exe",
+                "${env:ProgramFiles(x86)}\Docker\Docker\Docker Desktop.exe",
+                "$env:LOCALAPPDATA\Docker\Docker Desktop.exe"
+            )
+            
+            $dockerFound = $false
+            foreach ($path in $dockerPaths) {
+                if (Test-Path $path) {
+                    Write-Host "   Tentando iniciar o Docker Desktop..." -ForegroundColor Cyan
+                    Start-Process $path -ErrorAction SilentlyContinue
+                    $dockerFound = $true
+                    Write-Host "   Aguarde 30 segundos para o Docker iniciar..." -ForegroundColor Yellow
+                    Start-Sleep -Seconds 30
+                    break
+                }
+            }
+            
+            if (-not $dockerFound) {
+                Write-Host "❌ Docker Desktop não encontrado!" -ForegroundColor Red
+                Write-Host ""
+                Write-Host "💡 Soluções:" -ForegroundColor Yellow
+                Write-Host "   1. Instale o Docker Desktop: https://www.docker.com/products/docker-desktop" -ForegroundColor White
+                Write-Host "   2. Abra o Docker Desktop manualmente" -ForegroundColor White
+                Write-Host "   3. Aguarde até que o Docker esteja completamente iniciado" -ForegroundColor White
+                Write-Host "   4. Execute este script novamente" -ForegroundColor White
+                Write-Host ""
+                Write-Host "   Para verificar manualmente: docker info" -ForegroundColor Gray
+                exit 1
+            }
+        } else {
+            Write-Host "❌ Docker não está rodando ou não está acessível!" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "💡 Soluções:" -ForegroundColor Yellow
+            Write-Host "   1. Abra o Docker Desktop manualmente" -ForegroundColor White
+            Write-Host "   2. Aguarde até que o Docker esteja completamente iniciado (ícone verde na bandeja)" -ForegroundColor White
+            Write-Host "   3. Execute este script novamente" -ForegroundColor White
+            Write-Host ""
+            Write-Host "   Para verificar manualmente: docker info" -ForegroundColor Gray
+            Write-Host "   Para verificar serviços: Get-Service *docker*" -ForegroundColor Gray
+            exit 1
+        }
+    }
 }
 
 # Verifica se o docker-compose está instalado

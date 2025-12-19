@@ -8,8 +8,14 @@ Para validar a implementação localmente, consulte o guia completo: **[VALIDACA
 
 ### Início Rápido
 
-1. **Inicie os serviços Azure (Cosmos DB, Azurite, Service Bus)**:
-   ```bash
+1. **Verifique/Corrija o Docker (se necessário)**:
+   ```powershell
+   # Windows - Diagnóstico e correção automática
+   .\scripts\fix-docker.ps1
+   ```
+
+2. **Inicie os serviços Azure (Cosmos DB, Azurite, Service Bus)**:
+   ```powershell
    # Windows
    .\scripts\start-local.ps1
    
@@ -17,19 +23,28 @@ Para validar a implementação localmente, consulte o guia completo: **[VALIDACA
    ./scripts/start-local.sh
    ```
 
-2. **Execute a aplicação**:
+3. **Execute a aplicação**:
    ```bash
    .\mvnw.cmd quarkus:dev -Dquarkus.profile=local
    ```
 
-3. **Teste a API**:
-   ```bash
+4. **Teste a API**:
+   ```powershell
    # Windows
    .\scripts\test-api.ps1
    
    # Linux/Mac
    ./scripts/test-api.sh
    ```
+
+### ⚠️ Problemas com Docker?
+
+Se você encontrar erros relacionados ao Docker, execute:
+```powershell
+.\scripts\fix-docker.ps1
+```
+
+Este script irá diagnosticar e tentar corrigir automaticamente os problemas do Docker.
 
 ---
 

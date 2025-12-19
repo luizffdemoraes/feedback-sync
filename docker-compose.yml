@@ -1,11 +1,9 @@
-version: '3.9'
-
 services:
   # ---------------------------------------------------
   # Cosmos DB Emulator (Core SQL API)
   # ---------------------------------------------------
   cosmosdb:
-    image: mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator
+    image: mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest
     container_name: cosmos-emulator
     ports:
       - "8081:8081" # UI and SQL API endpoint
@@ -14,12 +12,11 @@ services:
       AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE: "true"
     mem_limit: 3g
     healthcheck:
-      test: ["CMD", "curl", "-f", "https://localhost:8081/_explorer/emulator.pem"]
+      test: ["CMD", "curl", "-k", "-f", "https://localhost:8081/_explorer/emulator.pem"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 30s
-    entrypoint: [ "/bin/bash", "-c", "chmod 755 /usr/local/bin/cosmosdb-emulator && /usr/local/bin/cosmosdb-emulator" ]
+      start_period: 60s
 
   # ---------------------------------------------------
   # Azurite (Blob, Queue, Table)
@@ -56,6 +53,7 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       SERVICEBUS_EMULATOR__STORAGE__MODE: Memory
+      ACCEPT_EULA: "Y"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 10s

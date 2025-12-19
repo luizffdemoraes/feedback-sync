@@ -213,6 +213,58 @@ docker-compose down -v
 
 ## ⚠️ Troubleshooting
 
+### Docker não está rodando
+
+**Problema**: Erro "unable to get image" ou "The system cannot find the file specified"
+
+**Solução Rápida**:
+```powershell
+# Execute o script de diagnóstico e correção automática
+.\scripts\fix-docker.ps1
+```
+
+Este script irá:
+1. ✅ Verificar se o Docker está instalado
+2. ✅ Verificar se o Docker está rodando
+3. ✅ Verificar serviços Docker
+4. ✅ Tentar iniciar o Docker Desktop automaticamente
+5. ✅ Aguardar até o Docker estar pronto
+
+**Solução Manual**:
+
+1. **Verifique se o Docker Desktop está instalado e rodando**:
+   ```powershell
+   # Execute o script de verificação
+   .\scripts\check-docker.ps1
+   ```
+
+2. **Se o Docker não estiver rodando**:
+   ```powershell
+   # Verificar serviços Docker
+   Get-Service *docker*
+   
+   # Tentar iniciar o Docker Desktop
+   Start-Process "C:\Program Files\Docker\Docker\Docker Desktop.exe"
+   
+   # Aguarde 30-60 segundos até o Docker iniciar completamente
+   # Procure pelo ícone da baleia na bandeja do sistema (deve ficar verde)
+   ```
+
+3. **Se o Docker Desktop não estiver instalado**:
+   - Baixe em: https://www.docker.com/products/docker-desktop
+   - Instale e reinicie o computador
+   - Inicie o Docker Desktop
+
+4. **Se o erro persistir**:
+   ```powershell
+   # Reinicie o Docker Desktop
+   # Feche o Docker Desktop completamente
+   # Abra novamente e aguarde iniciar
+   
+   # Ou reinicie os serviços Docker
+   Restart-Service *docker*
+   ```
+
 ### Cosmos DB não conecta
 
 **Problema**: Erro de SSL/certificado
