@@ -90,14 +90,18 @@ public class CosmosFeedbackGatewayImpl implements FeedbackGateway {
     @Override
     public List<Feedback> findByPeriod(Instant from, Instant to) {
         try {
+            // Converte Instant para LocalDateTime para comparar com o formato salvo
+            LocalDateTime fromDateTime = LocalDateTime.ofInstant(from, java.time.ZoneId.systemDefault());
+            LocalDateTime toDateTime = LocalDateTime.ofInstant(to, java.time.ZoneId.systemDefault());
+            
             String query = "SELECT * FROM c " +
                     "WHERE c.createdAt >= @from AND c.createdAt <= @to " +
                     "ORDER BY c.createdAt DESC";
 
             SqlQuerySpec querySpec = new SqlQuerySpec(query);
             SqlParameter[] parameters = {
-                    new SqlParameter("@from", from.toString()),
-                    new SqlParameter("@to", to.toString())
+                    new SqlParameter("@from", fromDateTime.toString()),
+                    new SqlParameter("@to", toDateTime.toString())
             };
             querySpec.setParameters(Arrays.asList(parameters));
 

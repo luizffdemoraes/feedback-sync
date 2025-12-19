@@ -55,11 +55,6 @@ public class SubmitFeedbackFunction {
 
             FeedbackResponse result = createFeedbackUseCase.execute(feedbackRequest);
 
-            if (feedbackRequest.score() <= 3) {
-                logger.warn("Feedback crítico recebido! Nota: {}", feedbackRequest.score());
-                // disparar evento para notifyAdmin aqui
-            }
-
             logger.info("Feedback processado com sucesso, id={}", result.getId());
 
             return request.createResponseBuilder(HttpStatus.CREATED)
