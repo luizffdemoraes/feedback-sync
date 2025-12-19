@@ -1,6 +1,7 @@
 package br.com.fiap.postech.feedback.infrastructure.gateways;
 
 import br.com.fiap.postech.feedback.domain.entities.Feedback;
+import br.com.fiap.postech.feedback.domain.exceptions.FeedbackPersistenceException;
 import br.com.fiap.postech.feedback.domain.gateways.FeedbackGateway;
 import com.azure.cosmos.*;
 import com.azure.cosmos.models.*;
@@ -83,7 +84,7 @@ public class CosmosFeedbackGatewayImpl implements FeedbackGateway {
 
         } catch (Exception e) {
             logger.error("Erro ao salvar feedback: {}", e.getMessage(), e);
-            throw new RuntimeException("Falha ao salvar feedback", e);
+            throw new FeedbackPersistenceException("Falha ao salvar feedback no Cosmos DB", e);
         }
     }
 
@@ -122,7 +123,7 @@ public class CosmosFeedbackGatewayImpl implements FeedbackGateway {
         List<Feedback> feedbacks = findByPeriod(startOfWeek, endOfWeek);
 
         double average = feedbacks.stream()
-                .mapToInt(Feedback::getScore)
+                .mapToInt(f -> f.getScore().getValue())
                 .average()
                 .orElse(0.0);
 
@@ -136,7 +137,7 @@ public class CosmosFeedbackGatewayImpl implements FeedbackGateway {
 
         Map<String, Long> urgencyCount = feedbacks.stream()
                 .collect(Collectors.groupingBy(
-                        Feedback::getUrgency,
+                        f -> f.getUrgency().getValue(),
                         Collectors.counting()
                 ));
 
@@ -158,29 +159,29 @@ public class CosmosFeedbackGatewayImpl implements FeedbackGateway {
         CosmosDocument doc = new CosmosDocument();
         doc.id = feedback.getId();
         doc.description = feedback.getDescription();
-        doc.score = feedback.getScore();
-        doc.urgency = feedback.getUrgency();
+        doc.score = feedback.getScore().getValue();
+        doc.urgency = feedback.getUrgency().getValue();
         doc.createdAt = feedback.getCreatedAt().toString();
         return doc;
     }
 
     private Feedback toEntity(CosmosDocument doc) {
-        Feedback feedback = new Feedback(
-                doc.description,
-                doc.score,
-                doc.urgency
+        // Usa método de reconstrução para manter imutabilidade
+        return Feedback.reconstruct(
+            doc.id,
+            doc.description,
+            doc.score,
+            doc.urgency != null ? doc.urgency : "LOW",
+            LocalDateTime.parse(doc.createdAt)
         );
-        feedback.setId(doc.id);
-        feedback.setCreatedAt(LocalDateTime.parse(doc.createdAt));
-        return feedback;
     }
 
     private Map<String, Object> toMap(Feedback feedback) {
         Map<String, Object> map = new HashMap<>();
         map.put("id", feedback.getId());
         map.put("description", feedback.getDescription());
-        map.put("score", feedback.getScore());
-        map.put("urgency", feedback.getUrgency());
+        map.put("score", feedback.getScore().getValue());
+        map.put("urgency", feedback.getUrgency().getValue());
         map.put("createdAt", feedback.getCreatedAt().toString());
         return map;
     }

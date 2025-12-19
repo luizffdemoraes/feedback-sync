@@ -36,7 +36,6 @@ public class GenerateWeeklyReportUseCaseImpl implements GenerateWeeklyReportUseC
     public WeeklyReportResponse execute() {
         logger.info("Iniciando geração de relatório semanal");
 
-        // Calcula período da semana anterior (segunda a domingo)
         LocalDate today = LocalDate.now();
         LocalDate lastMonday = today.minusWeeks(1)
                 .with(TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY));
@@ -47,7 +46,6 @@ public class GenerateWeeklyReportUseCaseImpl implements GenerateWeeklyReportUseC
 
         logger.info("Período do relatório: {} até {}", startOfWeek, endOfWeek);
 
-        // Busca feedbacks do período
         var feedbacks = feedbackGateway.findByPeriod(startOfWeek, endOfWeek);
 
         if (feedbacks.isEmpty()) {
@@ -55,9 +53,8 @@ public class GenerateWeeklyReportUseCaseImpl implements GenerateWeeklyReportUseC
             return createEmptyReport(startOfWeek, endOfWeek);
         }
 
-        // Calcula métricas
         double average = feedbacks.stream()
-                .mapToInt(f -> f.getScore())
+                .mapToInt(f -> f.getScore().getValue())
                 .average()
                 .orElse(0.0);
 
@@ -65,16 +62,13 @@ public class GenerateWeeklyReportUseCaseImpl implements GenerateWeeklyReportUseC
         Map<String, Long> urgencyCount = new HashMap<>();
 
         feedbacks.forEach(f -> {
-            // Contagem por dia
             String day = f.getCreatedAt().toLocalDate().toString();
             dailyCount.put(day, dailyCount.getOrDefault(day, 0L) + 1);
 
-            // Contagem por urgência
-            String urgency = f.getUrgency() != null ? f.getUrgency() : "LOW";
+            String urgency = f.getUrgency().getValue();
             urgencyCount.put(urgency, urgencyCount.getOrDefault(urgency, 0L) + 1);
         });
-
-        // Monta dados do relatório
+ 
         Map<String, Object> reportData = new HashMap<>();
         reportData.put("periodo_inicio", startOfWeek.toString());
         reportData.put("periodo_fim", endOfWeek.toString());
@@ -83,14 +77,22 @@ public class GenerateWeeklyReportUseCaseImpl implements GenerateWeeklyReportUseC
         reportData.put("avaliacoes_por_dia", dailyCount);
         reportData.put("avaliacoes_por_urgencia", urgencyCount);
         reportData.put("data_geracao", Instant.now().toString());
+        reportData.put("feedbacks", feedbacks.stream()
+                .map(f -> {
+                    Map<String, Object> feedbackMap = new HashMap<>();
+                    feedbackMap.put("descricao", f.getDescription());
+                    feedbackMap.put("urgencia", f.getUrgency().getValue());
+                    feedbackMap.put("data_envio", f.getCreatedAt().toString());
+                    feedbackMap.put("nota", f.getScore().getValue());
+                    return feedbackMap;
+                })
+                .toList());
 
-        // Salva relatório no Blob Storage
         String fileName = reportStorageGateway.saveWeeklyReport(reportData);
         String reportUrl = reportStorageGateway.getReportUrl(fileName);
 
         logger.info("Relatório semanal gerado e salvo: {}", fileName);
 
-        // Retorna resposta
         WeeklyReportResponse response = new WeeklyReportResponse();
         response.setPeriodoInicio(startOfWeek);
         response.setPeriodoFim(endOfWeek);

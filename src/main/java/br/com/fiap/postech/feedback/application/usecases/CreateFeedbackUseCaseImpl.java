@@ -3,13 +3,29 @@ package br.com.fiap.postech.feedback.application.usecases;
 import br.com.fiap.postech.feedback.application.dtos.requests.FeedbackRequest;
 import br.com.fiap.postech.feedback.application.dtos.responses.FeedbackResponse;
 import br.com.fiap.postech.feedback.domain.entities.Feedback;
+import br.com.fiap.postech.feedback.domain.exceptions.FeedbackDomainException;
 import br.com.fiap.postech.feedback.domain.gateways.FeedbackGateway;
 import br.com.fiap.postech.feedback.domain.gateways.NotificationGateway;
+import br.com.fiap.postech.feedback.domain.values.Score;
+import br.com.fiap.postech.feedback.domain.values.Urgency;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+/**
+ * Caso de uso para criar um novo feedback.
+ * 
+ * Responsabilidades:
+ * - Validar dados de entrada
+ * - Criar entidade de domínio
+ * - Persistir feedback
+ * - Notificar se crítico
+ */
 @ApplicationScoped
 public class CreateFeedbackUseCaseImpl implements CreateFeedbackUseCase {
+
+    private static final Logger logger = LoggerFactory.getLogger(CreateFeedbackUseCaseImpl.class);
 
     @Inject
     FeedbackGateway feedbackGateway;
@@ -17,24 +33,38 @@ public class CreateFeedbackUseCaseImpl implements CreateFeedbackUseCase {
     @Inject
     NotificationGateway notificationGateway;
 
-    private static final int CRITICAL_THRESHOLD = 3;
-
     @Override
     public FeedbackResponse execute(FeedbackRequest request) {
-        // basic validation
-        if (request.score() == null) throw new IllegalArgumentException("score is required");
-        Feedback feedback = new Feedback(request.description(), request.score(), request.urgency() == null ? "LOW" : request.urgency());
+        logger.debug("Criando feedback: descricao={}, score={}, urgency={}", 
+            request.description(), request.score(), request.urgency());
+
+        if (request.description() == null || request.description().isBlank()) {
+            throw new FeedbackDomainException("Descrição é obrigatória");
+        }
+
+        if (request.score() == null) {
+            throw new FeedbackDomainException("Nota é obrigatória");
+        }
+
+        Score score = new Score(request.score());
+        Urgency urgency = request.urgency() != null 
+            ? Urgency.of(request.urgency()) 
+            : Urgency.LOW;
+
+        Feedback feedback = new Feedback(request.description(), score, urgency);
+
         feedbackGateway.save(feedback);
-        if (feedback.getScore() <= CRITICAL_THRESHOLD) {
+
+        if (feedback.isCritical()) {
+            logger.info("Feedback crítico detectado, enviando notificação. ID: {}", feedback.getId());
             notificationGateway.publishCritical(feedback);
         }
-        return new FeedbackResponse(
-                feedback.getId(),
-                null,
-                feedback.getScore(),
-                feedback.getDescription(),
-                feedback.getCreatedAt()
-        );
 
+        return new FeedbackResponse(
+            feedback.getId(),
+            feedback.getScore().getValue(),
+            feedback.getDescription(),
+            feedback.getCreatedAt()
+        );
     }
 }

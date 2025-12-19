@@ -1,5 +1,6 @@
 package br.com.fiap.postech.feedback.infrastructure.gateways;
 
+import br.com.fiap.postech.feedback.domain.exceptions.NotificationException;
 import br.com.fiap.postech.feedback.domain.gateways.NotificationGateway;
 import com.azure.messaging.servicebus.ServiceBusClientBuilder;
 import com.azure.messaging.servicebus.ServiceBusMessage;
@@ -10,9 +11,18 @@ import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+/**
+ * Implementação do gateway de notificações usando Azure Service Bus.
+ * 
+ * Responsabilidade: Publicar mensagens no Service Bus para processamento assíncrono.
+ */
 @ApplicationScoped
 public class ServiceBusNotificationGatewayImpl implements NotificationGateway {
+
+    private static final Logger logger = LoggerFactory.getLogger(ServiceBusNotificationGatewayImpl.class);
 
     @ConfigProperty(name = "azure.servicebus.connection-string")
     String connectionString;
@@ -27,13 +37,18 @@ public class ServiceBusNotificationGatewayImpl implements NotificationGateway {
 
     @PostConstruct
     void init() {
-        senderClient = new ServiceBusClientBuilder()
-                .connectionString(connectionString)
-                .sender()
-                .topicName(topicName)
-                .buildClient();
+        try {
+            senderClient = new ServiceBusClientBuilder()
+                    .connectionString(connectionString)
+                    .sender()
+                    .topicName(topicName)
+                    .buildClient();
 
-        System.out.println("✅ Service Bus conectado ao tópico: " + topicName);
+            logger.info("Service Bus conectado ao tópico: {}", topicName);
+        } catch (Exception e) {
+            logger.error("Erro ao conectar ao Service Bus: {}", e.getMessage(), e);
+            throw new NotificationException("Falha ao conectar ao Service Bus", e);
+        }
     }
 
     @Override
@@ -47,11 +62,11 @@ public class ServiceBusNotificationGatewayImpl implements NotificationGateway {
 
             senderClient.sendMessage(message);
 
-            System.out.println("📤 Mensagem crítica publicada no Service Bus");
+            logger.info("Mensagem crítica publicada no Service Bus. Tópico: {}", topicName);
 
         } catch (Exception e) {
-            System.err.println("❌ Erro ao publicar no Service Bus: " + e.getMessage());
-            throw new RuntimeException("Falha ao publicar mensagem crítica", e);
+            logger.error("Erro ao publicar no Service Bus: {}", e.getMessage(), e);
+            throw new NotificationException("Falha ao publicar mensagem crítica", e);
         }
     }
 
@@ -64,18 +79,23 @@ public class ServiceBusNotificationGatewayImpl implements NotificationGateway {
 
             senderClient.sendMessage(serviceBusMessage);
 
-            System.out.println("📧 Notificação enviada ao admin: " + message);
+            logger.info("Notificação enviada ao admin via Service Bus");
 
         } catch (Exception e) {
-            System.err.println("❌ Erro ao enviar notificação: " + e.getMessage());
+            logger.error("Erro ao enviar notificação: {}", e.getMessage(), e);
+            throw new NotificationException("Falha ao enviar notificação ao admin", e);
         }
     }
 
     @PreDestroy
     void cleanup() {
         if (senderClient != null) {
-            senderClient.close();
-            System.out.println("🔌 Service Bus desconectado");
+            try {
+                senderClient.close();
+                logger.info("Service Bus desconectado");
+            } catch (Exception e) {
+                logger.warn("Erro ao fechar conexão do Service Bus: {}", e.getMessage());
+            }
         }
     }
 }
