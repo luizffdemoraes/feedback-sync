@@ -8,6 +8,8 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  VALIDACAO COMPLETA DOS FLUXOS" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
+Write-Host "URL da API: $API_URL" -ForegroundColor Gray
+Write-Host ""
 
 # Funcao para fazer requisicoes HTTP
 function Invoke-ApiRequest {
@@ -20,16 +22,34 @@ function Invoke-ApiRequest {
     
     try {
         if ($Body) {
-            $jsonBody = $Body | ConvertTo-Json -Compress
+            $jsonBody = $Body | ConvertTo-Json -Compress -Depth 10
+            Write-Host "   URL: $Url" -ForegroundColor Gray
+            Write-Host "   Body: $jsonBody" -ForegroundColor Gray
             $response = Invoke-RestMethod -Uri $Url -Method $Method -Body $jsonBody -ContentType $ContentType -ErrorAction Stop
         } else {
             $response = Invoke-RestMethod -Uri $Url -Method $Method -ErrorAction Stop
         }
         return @{ Success = $true; Data = $response }
     } catch {
-        $statusCode = $_.Exception.Response.StatusCode.value__
-        $errorMessage = $_.ErrorDetails.Message
-        return @{ Success = $false; StatusCode = $statusCode; Error = $errorMessage }
+        $statusCode = $null
+        $errorMessage = $_.Exception.Message
+        
+        # Tenta obter o status code se disponivel
+        if ($_.Exception.Response) {
+            $statusCode = $_.Exception.Response.StatusCode.value__
+        }
+        
+        # Tenta obter mensagem de erro mais detalhada
+        if ($_.ErrorDetails) {
+            $errorMessage = $_.ErrorDetails.Message
+        }
+        
+        # Se nao conseguiu mensagem, usa a excecao
+        if (-not $errorMessage) {
+            $errorMessage = $_.Exception.Message
+        }
+        
+        return @{ Success = $false; StatusCode = $statusCode; Error = $errorMessage; Exception = $_.Exception }
     }
 }
 
@@ -39,14 +59,85 @@ function Invoke-ApiRequest {
 Write-Host "1. VERIFICANDO SERVICOS..." -ForegroundColor Cyan
 Write-Host ""
 
-Write-Host "Verificando Aplicacao..." -ForegroundColor Yellow -NoNewline
+# Verifica se a porta esta em uso
+Write-Host "Verificando porta 7071..." -ForegroundColor Yellow -NoNewline
+$porta = netstat -ano | findstr :7071 | Select-String "LISTENING"
+if ($porta) {
+    Write-Host " OK (porta em uso)" -ForegroundColor Green
+} else {
+    Write-Host " Porta nao esta em uso" -ForegroundColor Red
+    Write-Host "   A aplicacao pode nao estar rodando" -ForegroundColor Yellow
+    Write-Host "   Execute: .\executar-app.ps1" -ForegroundColor White
+    Write-Host ""
+}
+
+# Verifica aplicacao HTTP
+Write-Host "Verificando Aplicacao HTTP..." -ForegroundColor Yellow -NoNewline
 try {
     $response = Invoke-WebRequest -Uri "http://localhost:7071" -Method Get -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
     Write-Host " OK" -ForegroundColor Green
+    Write-Host "   Status: $($response.StatusCode)" -ForegroundColor Gray
 } catch {
     Write-Host " Indisponivel" -ForegroundColor Red
-    Write-Host "   Erro: A aplicacao pode estar ainda inicializando" -ForegroundColor Yellow
+    Write-Host "   Erro: $($_.Exception.Message)" -ForegroundColor Yellow
+    Write-Host "   A aplicacao pode estar ainda inicializando" -ForegroundColor Yellow
+    Write-Host "   Aguarde ver 'Listening on: http://localhost:7071' no terminal da aplicacao" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "   Deseja continuar mesmo assim? (S/N)" -ForegroundColor Yellow
+    $continuar = Read-Host
+    if ($continuar -ne "S" -and $continuar -ne "s") {
+        Write-Host "Validacao cancelada pelo usuario" -ForegroundColor Yellow
+        exit 1
+    }
 }
+
+# Verifica se o endpoint da funcao esta disponivel
+Write-Host "Verificando endpoint /api/avaliacao..." -ForegroundColor Yellow -NoNewline
+try {
+    # Tenta fazer uma requisição OPTIONS ou HEAD para verificar se o endpoint existe
+    $testResponse = Invoke-WebRequest -Uri "http://localhost:7071/api/avaliacao" -Method OPTIONS -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop 2>$null
+    Write-Host " OK" -ForegroundColor Green
+} catch {
+    # Se OPTIONS falhar, tenta verificar se retorna 405 (Method Not Allowed) ao inves de 404
+    try {
+        $testResponse = Invoke-WebRequest -Uri "http://localhost:7071/api/avaliacao" -Method GET -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop 2>$null
+        if ($testResponse.StatusCode -eq 405) {
+            Write-Host " OK (endpoint existe, mas metodo GET nao permitido)" -ForegroundColor Green
+        } else {
+            Write-Host " Endpoint nao encontrado (404)" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "   PROBLEMA: A funcao 'submitFeedback' nao foi registrada!" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "   Solucao:" -ForegroundColor Yellow
+            Write-Host "   1. Verifique os logs da aplicacao" -ForegroundColor White
+            Write-Host "   2. Procure por: 'Function submitFeedback registered'" -ForegroundColor White
+            Write-Host "   3. Se nao aparecer, a funcao nao foi registrada" -ForegroundColor White
+            Write-Host "   4. Execute: .\scripts\resolver-tudo.ps1" -ForegroundColor White
+            Write-Host "   5. Reinicie a aplicacao: .\executar-app.ps1" -ForegroundColor White
+            Write-Host ""
+            exit 1
+        }
+    } catch {
+        $statusCode = $_.Exception.Response.StatusCode.value__
+        if ($statusCode -eq 404) {
+            Write-Host " Endpoint nao encontrado (404)" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "   PROBLEMA: A funcao 'submitFeedback' nao foi registrada!" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "   Solucao:" -ForegroundColor Yellow
+            Write-Host "   1. Verifique os logs da aplicacao" -ForegroundColor White
+            Write-Host "   2. Procure por: 'Function submitFeedback registered'" -ForegroundColor White
+            Write-Host "   3. Se nao aparecer, a funcao nao foi registrada" -ForegroundColor White
+            Write-Host "   4. Execute: .\scripts\resolver-tudo.ps1" -ForegroundColor White
+            Write-Host "   5. Reinicie a aplicacao: .\executar-app.ps1" -ForegroundColor White
+            Write-Host ""
+            exit 1
+        } else {
+            Write-Host " Erro desconhecido: $statusCode" -ForegroundColor Yellow
+        }
+    }
+}
+Write-Host ""
 
 # ============================================
 # 2. TESTE DE FEEDBACK NORMAL
@@ -70,10 +161,19 @@ if ($result.Success) {
     Write-Host "   Status: $($result.Data.status)" -ForegroundColor White
     $feedbackId1 = $result.Data.id
 } else {
-    Write-Host "Erro ao criar feedback: $($result.Error)" -ForegroundColor Red
+    Write-Host "Erro ao criar feedback!" -ForegroundColor Red
+    Write-Host "   Mensagem: $($result.Error)" -ForegroundColor Red
     if ($result.StatusCode) {
         Write-Host "   Status Code: $($result.StatusCode)" -ForegroundColor Red
     }
+    if ($result.Exception) {
+        Write-Host "   Excecao: $($result.Exception.GetType().Name)" -ForegroundColor Red
+    }
+    Write-Host ""
+    Write-Host "   Possiveis causas:" -ForegroundColor Yellow
+    Write-Host "   - Aplicacao ainda nao terminou de inicializar" -ForegroundColor White
+    Write-Host "   - Endpoint incorreto (verifique se e /api/avaliacao)" -ForegroundColor White
+    Write-Host "   - Erro na aplicacao (verifique logs)" -ForegroundColor White
 }
 
 Start-Sleep -Seconds 2
@@ -111,7 +211,11 @@ if ($result.Success) {
     Write-Host "   - Mensagem enviada ao Service Bus" -ForegroundColor White
     Write-Host "   - NotifyAdminFunction processou a mensagem" -ForegroundColor White
 } else {
-    Write-Host "Erro ao criar feedback critico: $($result.Error)" -ForegroundColor Red
+    Write-Host "Erro ao criar feedback critico!" -ForegroundColor Red
+    Write-Host "   Mensagem: $($result.Error)" -ForegroundColor Red
+    if ($result.StatusCode) {
+        Write-Host "   Status Code: $($result.StatusCode)" -ForegroundColor Red
+    }
 }
 
 Start-Sleep -Seconds 2
@@ -132,8 +236,12 @@ $feedbackInvalido = @{
 $result = Invoke-ApiRequest -Url $API_URL -Body $feedbackInvalido
 if (-not $result.Success) {
     Write-Host "Validacao funcionando (nota deve estar entre 0-10)" -ForegroundColor Green
+    if ($result.StatusCode) {
+        Write-Host "   Status Code recebido: $($result.StatusCode)" -ForegroundColor Gray
+    }
 } else {
     Write-Host "Validacao nao funcionou como esperado" -ForegroundColor Yellow
+    Write-Host "   Feedback foi aceito quando deveria ser rejeitado" -ForegroundColor Yellow
 }
 
 Start-Sleep -Seconds 1
@@ -147,8 +255,12 @@ $feedbackSemDescricao = @{
 $result = Invoke-ApiRequest -Url $API_URL -Body $feedbackSemDescricao
 if (-not $result.Success) {
     Write-Host "Validacao funcionando (descricao e obrigatoria)" -ForegroundColor Green
+    if ($result.StatusCode) {
+        Write-Host "   Status Code recebido: $($result.StatusCode)" -ForegroundColor Gray
+    }
 } else {
     Write-Host "Validacao nao funcionou como esperado" -ForegroundColor Yellow
+    Write-Host "   Feedback foi aceito quando deveria ser rejeitado" -ForegroundColor Yellow
 }
 
 # ============================================

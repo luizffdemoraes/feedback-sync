@@ -1,0 +1,19 @@
+FROM mcr.microsoft.com/azure-messaging/servicebus-emulator:latest
+
+# Instalar dependências necessárias para o script
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    iputils-ping \
+    dnsutils \
+    netcat-openbsd \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copiar script de entrada
+COPY servicebus-entrypoint.sh /entrypoint.sh
+
+# Tornar o script executável
+RUN chmod +x /entrypoint.sh
+
+# Usar o script como entrypoint
+ENTRYPOINT ["/entrypoint.sh"]
+
