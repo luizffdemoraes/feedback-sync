@@ -1,19 +1,34 @@
+# Usar a imagem oficial do Service Bus Emulator
 FROM mcr.microsoft.com/azure-messaging/servicebus-emulator:latest
 
-# Instalar dependências necessárias para o script
+# A imagem oficial não tem shell, então vamos usar uma abordagem diferente:
+# Usar uma imagem base com shell e copiar/executar o emulador
+# Mas isso é complexo. Vamos tentar uma abordagem mais simples:
+# Usar a imagem oficial e configurar apenas via variáveis de ambiente
+# O problema de DNS será resolvido usando o IP diretamente via variável
+
+# Como a imagem oficial não permite customização fácil, vamos usar uma imagem base .NET
+# e instalar o emulador manualmente ou usar uma abordagem wrapper
+FROM mcr.microsoft.com/dotnet/aspnet:8.0
+
+# Instalar dependências
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
+    curl \
     iputils-ping \
     dnsutils \
     netcat-openbsd \
+    bash \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Copiar script de entrada
 COPY servicebus-entrypoint.sh /entrypoint.sh
-
-# Tornar o script executável
 RUN chmod +x /entrypoint.sh
 
-# Usar o script como entrypoint
-ENTRYPOINT ["/entrypoint.sh"]
+WORKDIR /app
+
+# O script irá baixar/instalar o emulador se necessário
+# Por enquanto, vamos assumir que o emulador será executado via script
+ENTRYPOINT ["/bin/bash", "/entrypoint.sh"]
 

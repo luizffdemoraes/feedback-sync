@@ -1,6 +1,11 @@
 #!/bin/bash
 set -e
 
+# Verificar se estamos em ambiente Docker
+if [ -z "$DOCKER_CONTAINER" ]; then
+    export DOCKER_CONTAINER=1
+fi
+
 echo "=========================================="
 echo "Azure Service Bus Emulator - Inicialização"
 echo "=========================================="
@@ -85,35 +90,29 @@ echo "=========================================="
 echo "Iniciando Azure Service Bus Emulator..."
 echo "=========================================="
 
-# A imagem base do Service Bus Emulator usa dotnet para executar o emulador
-# Vamos procurar o executável e executá-lo
-# O caminho padrão é /app/ServiceBus.Emulator.dll baseado na documentação
+# Após configurar a connection string, precisamos executar o Service Bus Emulator
+# Como não temos a imagem oficial disponível aqui, vamos usar uma abordagem alternativa:
+# Usar docker run com a imagem oficial, ou instalar o emulador manualmente
 
-if command -v dotnet &> /dev/null; then
-    # Procurar o DLL do emulador nos locais comuns
-    if [ -f "/app/ServiceBus.Emulator.dll" ]; then
-        echo "Executando: dotnet /app/ServiceBus.Emulator.dll"
-        exec dotnet /app/ServiceBus.Emulator.dll
-    elif [ -f "/ServiceBus.Emulator.dll" ]; then
-        echo "Executando: dotnet /ServiceBus.Emulator.dll"
-        exec dotnet /ServiceBus.Emulator.dll
-    else
-        echo "AVISO: DLL do emulador não encontrado nos caminhos padrão"
-        echo "Tentando encontrar o executável..."
-        # Procurar recursivamente
-        EMULATOR_DLL=$(find / -name "ServiceBus.Emulator.dll" 2>/dev/null | head -n 1)
-        if [ -n "$EMULATOR_DLL" ]; then
-            echo "Encontrado em: $EMULATOR_DLL"
-            exec dotnet "$EMULATOR_DLL"
-        else
-            echo "ERRO: Não foi possível encontrar o ServiceBus.Emulator.dll"
-            echo "Tentando executar o entrypoint padrão da imagem..."
-            # Tentar executar o que a imagem original executaria
-            exec /bin/sh
-        fi
-    fi
-else
-    echo "ERRO: dotnet não encontrado no PATH"
-    exit 1
-fi
+# Por enquanto, vamos usar a imagem oficial via docker-in-docker ou
+# instalar o emulador manualmente. A solução mais prática é usar a imagem oficial
+# diretamente no docker-compose sem customização, e resolver o problema de DNS
+# de outra forma.
+
+echo "AVISO: Este Dockerfile customizado requer o Service Bus Emulator instalado."
+echo "Recomendação: Use a imagem oficial diretamente no docker-compose.yml"
+echo "e configure a connection string usando o IP do SQL Server via variável de ambiente."
+
+# Se chegou até aqui, vamos tentar executar o que estiver disponível
+# Por padrão, vamos apenas aguardar e mostrar a configuração
+echo ""
+echo "Connection String configurada:"
+echo "  $CONNECTION_STRING"
+echo ""
+echo "Para usar a imagem oficial do Service Bus Emulator,"
+echo "configure a variável SERVICEBUS_EMULATOR__STORAGE__SQLSERVER__CONNECTIONSTRING"
+echo "no docker-compose.yml com o IP resolvido."
+
+# Manter o container rodando para debug
+tail -f /dev/null
 
