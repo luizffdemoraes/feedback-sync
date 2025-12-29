@@ -9,6 +9,7 @@ import com.azure.data.tables.TableClientBuilder;
 import com.azure.data.tables.TableServiceClient;
 import com.azure.data.tables.TableServiceClientBuilder;
 import com.azure.data.tables.models.TableEntity;
+import com.azure.data.tables.models.TableServiceException;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -52,9 +53,6 @@ public class TableStorageFeedbackGatewayImpl implements FeedbackGateway {
 
     @PostConstruct
     public void init() {
-        logger.info("Inicializando Table Storage Gateway...");
-        logger.info("Table Name: {}", tableName);
-        
         try {
             // Criar TableServiceClient para gerenciar tabelas
             tableServiceClient = new TableServiceClientBuilder()
@@ -62,17 +60,28 @@ public class TableStorageFeedbackGatewayImpl implements FeedbackGateway {
                     .buildClient();
             
             // Criar tabela se não existir
-            logger.debug("Criando tabela se não existir: {}", tableName);
-            tableServiceClient.createTableIfNotExists(tableName);
+            try {
+                tableServiceClient.createTableIfNotExists(tableName);
+            } catch (TableServiceException e) {
+                // Status 409 (Conflict) significa que a tabela já existe - isso é esperado e não é erro
+                String errorMessage = e.getMessage();
+                if (errorMessage == null || (!errorMessage.contains("TableAlreadyExists") && !errorMessage.contains("409"))) {
+                    // Outros erros devem ser propagados
+                    throw e;
+                }
+            }
             
             // Criar TableClient para operações na tabela
             tableClient = new TableClientBuilder()
                     .connectionString(storageConnectionString)
                     .tableName(tableName)
                     .buildClient();
-            
-            logger.info("Table Storage conectado com sucesso: {}", tableName);
 
+        } catch (TableServiceException e) {
+            logger.error("Erro ao conectar ao Table Storage (TableServiceException). Mensagem: {}", 
+                e.getMessage(), e);
+            throw new FeedbackPersistenceException(
+                String.format("Falha ao conectar ao Table Storage: %s", e.getMessage()), e);
         } catch (Exception e) {
             logger.error("Erro ao conectar ao Table Storage: {}", e.getMessage(), e);
             throw new FeedbackPersistenceException(

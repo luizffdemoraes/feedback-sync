@@ -63,19 +63,16 @@ public class CreateFeedbackUseCaseImpl implements CreateFeedbackUseCase {
 
         // Notificação não bloqueante - não falha a requisição se o Service Bus estiver indisponível
         if (feedback.isCritical()) {
-            logger.info("Feedback crítico detectado, enviando notificação. ID: {}", feedback.getId());
             try {
                 notificationGateway.publishCritical(feedback);
-                logger.info("Notificação crítica enviada com sucesso para o Service Bus");
             } catch (NotificationException e) {
                 // Loga o erro mas não falha a requisição - o feedback já foi salvo
                 logger.error("Erro ao enviar notificação crítica (feedback já salvo). ID: {}, Erro: {}", 
-                    feedback.getId(), e.getMessage(), e);
-                // Não relança a exceção - permite que a requisição seja concluída com sucesso
+                    feedback.getId(), e.getMessage());
             } catch (Exception e) {
                 // Captura qualquer outra exceção inesperada
                 logger.error("Erro inesperado ao enviar notificação crítica (feedback já salvo). ID: {}, Erro: {}", 
-                    feedback.getId(), e.getMessage(), e);
+                    feedback.getId(), e.getMessage());
             }
         }
 

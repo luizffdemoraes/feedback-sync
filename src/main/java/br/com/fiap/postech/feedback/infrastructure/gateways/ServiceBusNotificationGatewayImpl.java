@@ -42,14 +42,11 @@ public class ServiceBusNotificationGatewayImpl implements NotificationGateway {
     @PostConstruct
     void init() {
         try {
-            logger.info("Inicializando conexão com Service Bus. Tópico: {}", topicName);
             senderClient = new ServiceBusClientBuilder()
                     .connectionString(connectionString)
                     .sender()
                     .topicName(topicName)
                     .buildClient();
-
-            logger.info("Service Bus conectado com sucesso ao tópico: {}", topicName);
         } catch (Exception e) {
             logger.error("Falha ao conectar ao Service Bus. Tópico: {}, Erro: {}", topicName, e.getMessage(), e);
         }
@@ -71,8 +68,6 @@ public class ServiceBusNotificationGatewayImpl implements NotificationGateway {
                     .setSubject("critical-feedback");
 
             senderClient.sendMessage(message);
-
-            logger.info("Mensagem crítica publicada no Service Bus. Tópico: {}", topicName);
 
         } catch (Exception e) {
             logger.error("Erro ao publicar mensagem crítica no Service Bus. Tópico: {}, Erro: {}", 
@@ -96,8 +91,6 @@ public class ServiceBusNotificationGatewayImpl implements NotificationGateway {
 
             senderClient.sendMessage(serviceBusMessage);
 
-            logger.info("Notificação enviada ao admin via Service Bus");
-
         } catch (Exception e) {
             logger.error("Erro ao enviar notificação ao admin via Service Bus. Erro: {}", e.getMessage(), e);
             throw new NotificationException("Falha ao enviar notificação ao admin: " + e.getMessage(), e);
@@ -109,7 +102,6 @@ public class ServiceBusNotificationGatewayImpl implements NotificationGateway {
         if (senderClient != null) {
             try {
                 senderClient.close();
-                logger.info("Service Bus desconectado");
             } catch (Exception e) {
                 logger.warn("Erro ao fechar conexão do Service Bus: {}", e.getMessage());
             }
