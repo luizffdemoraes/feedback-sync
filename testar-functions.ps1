@@ -9,7 +9,9 @@
 
 param(
     [switch]$SkipPreChecks,
-    [switch]$Verbose
+    [switch]$Verbose,
+    [int]$TimeoutSeconds = 10,
+    [int]$MaxRetries = 2
 )
 
 $ErrorActionPreference = "Stop"
@@ -27,6 +29,9 @@ $baseUrl = "http://localhost:7071"
 $endpointSubmit = "$baseUrl/avaliacao"  # Quarkus REST endpoint
 $testResults = @()
 $startTime = Get-Date
+
+# Limpar resultados de execuções anteriores (se houver)
+$testResults = @()
 
 # ============================================
 # Funções auxiliares
@@ -120,6 +125,27 @@ function Test-Prerequisites {
     return $true
 }
 
+function Test-ApplicationHealth {
+    param([int]$MaxAttempts = 3, [int]$TimeoutSec = 10)
+    
+    for ($i = 1; $i -le $MaxAttempts; $i++) {
+        try {
+            $response = Invoke-WebRequest -Uri $baseUrl -Method GET -TimeoutSec $TimeoutSec -ErrorAction Stop
+            return $true
+        } catch {
+            if ($i -lt $MaxAttempts) {
+                Write-Detail "  Tentativa $i/$MaxAttempts falhou, aguardando 3s..."
+                Start-Sleep -Seconds 3
+            } else {
+                Write-Warning "  Aplicação não está respondendo após $MaxAttempts tentativas (timeout: ${TimeoutSec}s)"
+                Write-Warning "  Verifique se a aplicação está rodando e se não há erros nos logs"
+                return $false
+            }
+        }
+    }
+    return $false
+}
+
 function Invoke-FunctionTest {
     param(
         [string]$TestName,
@@ -133,6 +159,26 @@ function Invoke-FunctionTest {
     
     Write-Info "`n--- Teste: $TestName ---"
     Write-Detail $Description
+    
+    # Verificar saúde da aplicação antes de cada teste crítico
+    if ($TestName -match "Critico|Critica") {
+        Write-Detail "Verificando saúde da aplicação antes do teste crítico..."
+        if (-not (Test-ApplicationHealth -TimeoutSec 10)) {
+            $testResult = @{
+                Name = $TestName
+                Description = $Description
+                Status = "ERROR"
+                Message = "Aplicação não está respondendo. Verifique se está rodando e se não há erros nos logs."
+                Duration = 0
+                Response = $null
+                EndpointUsed = $Uri
+            }
+            $script:testResults += $testResult
+            Write-Error "  [X] ERRO: Aplicação não está respondendo"
+            Write-Warning "  Dica: Execute 'executar-app.ps1' para reiniciar a aplicação"
+            return $testResult
+        }
+    }
     
     # Criar novo objeto hashtable para cada teste
     $testResult = [ordered]@{
@@ -155,39 +201,60 @@ function Invoke-FunctionTest {
         $success = $false
         
         foreach ($endpointUri in $endpointsToTry) {
-            try {
-                $params = @{
-                    Uri = $endpointUri
-                    Method = $Method
-                    ContentType = "application/json"
-                    TimeoutSec = 30
-                    ErrorAction = "Stop"
-                }
-                
-                if ($Body) {
-                    if ($Body -is [string]) {
-                        $params.Body = $Body
-                    } else {
-                        $params.Body = ($Body | ConvertTo-Json -Compress)
+            $retryCount = 0
+            while ($retryCount -le $MaxRetries -and -not $success) {
+                try {
+                    $params = @{
+                        Uri = $endpointUri
+                        Method = $Method
+                        ContentType = "application/json"
+                        TimeoutSec = $TimeoutSeconds
+                        ErrorAction = "Stop"
                     }
-                }
-                
-                $response = Invoke-RestMethod @params
-                $testResult.Response = $response
-                $testResult.EndpointUsed = $endpointUri
-                $success = $true
-                break
-                
-            } catch {
-                $lastError = $_
-                # Se for 404 e houver mais endpoints para tentar, continuar
-                if ($_.Exception.Response) {
-                    $statusCode = [int]$_.Exception.Response.StatusCode.value__
-                    if ($statusCode -eq 404 -and $endpointsToTry.IndexOf($endpointUri) -lt ($endpointsToTry.Count - 1)) {
-                        Write-Detail "  Tentando endpoint alternativo..."
+                    
+                    if ($Body) {
+                        if ($Body -is [string]) {
+                            $params.Body = $Body
+                        } else {
+                            $params.Body = ($Body | ConvertTo-Json -Compress)
+                        }
+                    }
+                    
+                    $response = Invoke-RestMethod @params
+                    $testResult.Response = $response
+                    $testResult.EndpointUsed = $endpointUri
+                    $success = $true
+                    break
+                    
+                } catch {
+                    $lastError = $_
+                    
+                    # Se for erro de conexão e ainda houver tentativas, fazer retry
+                    if ($_.Exception -is [System.Net.WebException] -and 
+                        $_.Exception.Status -eq [System.Net.WebExceptionStatus]::ConnectFailure -and
+                        $retryCount -lt $MaxRetries) {
+                        $retryCount++
+                        Write-Detail "  Retry $retryCount/$MaxRetries após erro de conexão..."
+                        Start-Sleep -Seconds 1
                         continue
                     }
+                    
+                    # Se for 404 e houver mais endpoints para tentar, continuar
+                    if ($_.Exception.Response) {
+                        $statusCode = [int]$_.Exception.Response.StatusCode.value__
+                        if ($statusCode -eq 404 -and $endpointsToTry.IndexOf($endpointUri) -lt ($endpointsToTry.Count - 1)) {
+                            Write-Detail "  Tentando endpoint alternativo..."
+                            break
+                        }
+                    }
+                    
+                    # Se não for retry, sair do loop
+                    break
                 }
+            }
+            
+            if ($success) {
+                break
             }
         }
         
@@ -203,16 +270,40 @@ function Invoke-FunctionTest {
                     $testResult.Status = "PASS"
                     $testResult.Message = "Erro esperado recebido corretamente"
                     Write-Success "  [OK] PASSOU (erro esperado)"
+                } elseif ($statusCode -eq 503 -and $ExpectedStatus -eq 400) {
+                    # 503 pode indicar que a aplicação está sobrecarregada ou caiu
+                    $testResult.Status = "ERROR"
+                    $testResult.Message = "Serviço indisponível (503). A aplicação pode ter caído ou estar sobrecarregada."
+                    Write-Error "  [X] ERRO: $($testResult.Message)"
+                    Write-Warning "  Verifique os logs da aplicação e se ela está rodando corretamente"
                 } else {
                     $testResult.Status = "FAIL"
-                    $testResult.Message = "Erro inesperado: Status $statusCode - $responseBody"
+                    $testResult.Message = "Erro inesperado: Status $statusCode (esperado $ExpectedStatus) - $responseBody"
                     Write-Error "  [X] FALHOU: $($testResult.Message)"
                 }
                 $testResult.Response = $responseBody
             } else {
                 $testResult.Status = "ERROR"
-                $testResult.Message = "Erro de conexao: $($lastError.Exception.Message)"
-                Write-Error "  [X] ERRO: $($testResult.Message)"
+                $errorMsg = $lastError.Exception.Message
+                
+                # Verificar se é erro de conexão (aplicação pode ter caído)
+                if ($lastError.Exception -is [System.Net.WebException]) {
+                    $webEx = $lastError.Exception
+                    if ($webEx.Status -eq [System.Net.WebExceptionStatus]::ConnectFailure) {
+                        $testResult.Message = "Erro de conexão: Aplicação não está respondendo. Verifique se a aplicação está rodando."
+                        Write-Error "  [X] ERRO: $($testResult.Message)"
+                        Write-Warning "  Dica: Execute 'executar-app.ps1' para iniciar a aplicação"
+                    } elseif ($webEx.Status -eq [System.Net.WebExceptionStatus]::Timeout) {
+                        $testResult.Message = "Timeout: A requisição excedeu $TimeoutSeconds segundos"
+                        Write-Error "  [X] ERRO: $($testResult.Message)"
+                    } else {
+                        $testResult.Message = "Erro de conexão: $errorMsg"
+                        Write-Error "  [X] ERRO: $($testResult.Message)"
+                    }
+                } else {
+                    $testResult.Message = "Erro: $errorMsg"
+                    Write-Error "  [X] ERRO: $($testResult.Message)"
+                }
             }
         } else {
             # Verificar status code (se disponível)
@@ -296,7 +387,16 @@ function Test-FeedbackController {
             return ($response.id -and $response.status -eq "recebido")
         }
     
-    Start-Sleep -Seconds 1
+    Start-Sleep -Seconds 2
+    
+    # Verificar saúde da aplicação antes do teste crítico
+    Write-Detail "Verificando saúde da aplicação antes do teste crítico..."
+    if (-not (Test-ApplicationHealth -TimeoutSec 10)) {
+        Write-Warning "`n[AVISO] Aplicação não está respondendo. Pulando testes restantes da função Test-FeedbackController."
+        Write-Warning "  A aplicação pode ter caído ou estar sobrecarregada."
+        Write-Warning "  Verifique os logs da aplicação e tente reiniciá-la."
+        return
+    }
     
     # Teste 2: Feedback crítico (nota <= 3) - deve funcionar e disparar notificação
     Invoke-FunctionTest `
@@ -314,7 +414,7 @@ function Test-FeedbackController {
             return ($response.id -and $response.status -eq "recebido")
         }
     
-    Start-Sleep -Seconds 2
+    Start-Sleep -Seconds 3
     
     # Teste 3: Feedback com nota alta
     Invoke-FunctionTest `
@@ -454,7 +554,9 @@ function Test-NotifyAdminFunction {
         $response = Invoke-RestMethod -Uri $endpointSubmit `
             -Method POST `
             -ContentType "application/json" `
-            -Body $criticalBody
+            -Body $criticalBody `
+            -TimeoutSec $TimeoutSeconds `
+            -ErrorAction Stop
         
         Write-Success "  [OK] Feedback critico criado (ID: $($response.id))"
         Write-Info "`nAgora verifique os logs da aplicacao para confirmar:"
@@ -607,6 +709,10 @@ Write-Host "  Script de Validacao do Projeto Feedback" -ForegroundColor Cyan
 Write-Host "  feedback-sync - FIAP Postech" -ForegroundColor Cyan
 Write-Host "  Clean Architecture + Azure Functions" -ForegroundColor Cyan
 Write-Host "============================================================" -ForegroundColor Cyan
+Write-Host ""
+Write-Info "Parametros configurados:"
+Write-Host "  Timeout: $TimeoutSeconds segundos" -ForegroundColor Gray
+Write-Host "  Max Retries: $MaxRetries" -ForegroundColor Gray
 Write-Host ""
 
 if (-not $SkipPreChecks) {
