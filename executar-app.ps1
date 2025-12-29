@@ -9,39 +9,31 @@ Write-Host "Verificando pre-requisitos..." -ForegroundColor Yellow
 Write-Host "Verificando containers Docker..." -ForegroundColor Yellow
 try {
     $containerNames = docker ps --format "{{.Names}}" 2>$null
-    $cosmos = $containerNames | Where-Object { $_ -match 'cosmos' }
     $azurite = $containerNames | Where-Object { $_ -match 'azurite' }
     $servicebus = $containerNames | Where-Object { $_ -match 'servicebus' }
     $sqlserver = $containerNames | Where-Object { $_ -match 'sqlserver' }
     
     $todosRodando = $true
     
-    if (-not $cosmos) {
-        Write-Host "   ✗ Cosmos DB não está rodando" -ForegroundColor Red
-        $todosRodando = $false
-    } else {
-        Write-Host "   ✓ Cosmos DB: rodando" -ForegroundColor Green
-    }
-    
     if (-not $azurite) {
-        Write-Host "   ✗ Azurite não está rodando" -ForegroundColor Red
+        Write-Host "   [X] Azurite nao esta rodando (Table Storage, Blob Storage)" -ForegroundColor Red
         $todosRodando = $false
     } else {
-        Write-Host "   ✓ Azurite: rodando" -ForegroundColor Green
+        Write-Host "   [OK] Azurite: rodando (Table Storage, Blob Storage)" -ForegroundColor Green
     }
     
     if (-not $sqlserver) {
-        Write-Host "   ✗ SQL Server não está rodando" -ForegroundColor Red
+        Write-Host "   [X] SQL Server nao esta rodando" -ForegroundColor Red
         $todosRodando = $false
     } else {
-        Write-Host "   ✓ SQL Server: rodando" -ForegroundColor Green
+        Write-Host "   [OK] SQL Server: rodando" -ForegroundColor Green
     }
     
     if (-not $servicebus) {
-        Write-Host "   ✗ Service Bus não está rodando" -ForegroundColor Red
+        Write-Host "   [X] Service Bus nao esta rodando" -ForegroundColor Red
         $todosRodando = $false
     } else {
-        Write-Host "   ✓ Service Bus: rodando" -ForegroundColor Green
+        Write-Host "   [OK] Service Bus: rodando" -ForegroundColor Green
     }
     
     if (-not $todosRodando) {
@@ -53,7 +45,7 @@ try {
         Write-Host "Deseja continuar mesmo assim? (S/N)" -ForegroundColor Yellow
         $continuar = Read-Host
         if ($continuar -ne "S" -and $continuar -ne "s") {
-            Write-Host "Execução cancelada" -ForegroundColor Yellow
+            Write-Host "Execucao cancelada" -ForegroundColor Yellow
             exit 0
         }
         Write-Host ""
@@ -64,7 +56,7 @@ try {
     }
 } catch {
     Write-Host "ATENCAO: Nao foi possivel verificar containers Docker" -ForegroundColor Yellow
-    Write-Host "   Certifique-se de que o Docker está rodando" -ForegroundColor White
+    Write-Host "   Certifique-se de que o Docker esta rodando" -ForegroundColor White
     Write-Host ""
 }
 
@@ -76,5 +68,5 @@ Write-Host ""
 
 # Executa a aplicacao (nao em background para ver os logs)
 # No PowerShell, o -D precisa estar entre aspas
-$env:QUARKUS_PROFILE = "local"
+$env:QUARKUS_PROFILE = 'local'
 .\mvnw.cmd quarkus:dev

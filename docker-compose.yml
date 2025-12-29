@@ -4,28 +4,8 @@ networks:
 
 services:
   # ---------------------------------------------------
-  # Cosmos DB Emulator (Core SQL API)
-  # ---------------------------------------------------
-  cosmosdb:
-    image: mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest
-    container_name: cosmos-emulator
-    networks:
-      - feedback-network
-    ports:
-      - "8081:8081" # UI and SQL API endpoint
-    environment:
-      AZURE_COSMOS_EMULATOR_IP_ADDRESS_OVERRIDE: "0.0.0.0"
-      AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE: "true"
-    mem_limit: 3g
-    healthcheck:
-      test: ["CMD", "curl", "-k", "-f", "https://localhost:8081/_explorer/emulator.pem"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 60s
-
-  # ---------------------------------------------------
-  # Azurite (Blob, Queue, Table)
+  # Azurite (Blob, Queue, Table Storage)
+  # Substitui Cosmos DB - Table Storage é usado para persistência de feedbacks
   # ---------------------------------------------------
   azurite:
     image: mcr.microsoft.com/azure-storage/azurite
@@ -38,17 +18,19 @@ services:
       --queueHost 0.0.0.0
       --tableHost 0.0.0.0
     ports:
-      - "10000:10000" # Blob
-      - "10001:10001" # Queue
-      - "10002:10002" # Table
+      - "10000:10000" # Blob Storage (relatórios semanais)
+      - "10001:10001" # Queue Storage
+      - "10002:10002" # Table Storage (feedbacks - substitui Cosmos DB)
     volumes:
       - azurite_data:/data
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:10000/devstoreaccount1 || exit 1"]
+      # Verifica se o Table Storage está respondendo (porta 10002)
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:10002/devstoreaccount1 || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
+    restart: unless-stopped
 
   # ---------------------------------------------------
   # SQL Server (requerido pelo Service Bus Emulator)
@@ -72,6 +54,7 @@ services:
       timeout: 5s
       retries: 10
       start_period: 60s
+    restart: unless-stopped
 
   # ---------------------------------------------------
   # Azure Service Bus Local Emulator

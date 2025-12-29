@@ -45,11 +45,18 @@ function Test-Prerequisites {
             Write-Error "  [X] Docker nao esta rodando ou nao ha containers"
             $allOk = $false
         } else {
-            $required = @("cosmos", "azurite", "servicebus", "sqlserver")
+            # Containers necessários: Azurite (Table Storage + Blob), SQL Server, Service Bus
+            $required = @("azurite", "servicebus", "sqlserver")
             foreach ($req in $required) {
                 $found = $containers | Where-Object { $_ -match $req }
                 if ($found) {
-                    Write-Success "  [OK] $req : rodando"
+                    $displayName = switch ($req) {
+                        "azurite" { "Azurite (Table Storage + Blob)" }
+                        "servicebus" { "Service Bus" }
+                        "sqlserver" { "SQL Server" }
+                        default { $req }
+                    }
+                    Write-Success "  [OK] $displayName : rodando"
                 } else {
                     Write-Error "  [X] $req : nao encontrado"
                     $allOk = $false
@@ -279,9 +286,9 @@ function Test-FeedbackController {
         -Description "Envia feedback com nota 8 (nao critico)" `
         -Uri $endpointSubmit `
         -Body @{
-            description = "Aula muito boa, professor explicou bem os conceitos"
-            score = 8
-            urgency = "normal"
+            descricao = "Aula muito boa, professor explicou bem os conceitos"
+            nota = 8
+            urgencia = "LOW"
         } `
         -ExpectedStatus 201 `
         -Validation {
@@ -297,9 +304,9 @@ function Test-FeedbackController {
         -Description "Envia feedback com nota 2 (critico - deve disparar NotifyAdminFunction)" `
         -Uri $endpointSubmit `
         -Body @{
-            description = "Aula muito ruim, nao entendi nada"
-            score = 2
-            urgency = "high"
+            descricao = "Aula muito ruim, nao entendi nada"
+            nota = 2
+            urgencia = "HIGH"
         } `
         -ExpectedStatus 201 `
         -Validation {
@@ -309,15 +316,15 @@ function Test-FeedbackController {
     
     Start-Sleep -Seconds 2
     
-    # Teste 3: Feedback com campos em português
+    # Teste 3: Feedback com nota alta
     Invoke-FunctionTest `
-        -TestName "SubmitFeedback - Campos em Portugues" `
-        -Description "Envia feedback usando campos em portugues (descricao, nota, urgencia)" `
+        -TestName "SubmitFeedback - Feedback Nota Alta" `
+        -Description "Envia feedback com nota 9 (excelente)" `
         -Uri $endpointSubmit `
         -Body @{
             descricao = "Aula excelente, muito didatica"
             nota = 9
-            urgencia = "baixa"
+            urgencia = "LOW"
         } `
         -ExpectedStatus 201 `
         -Validation {
@@ -343,8 +350,8 @@ function Test-FeedbackController {
         -Description "Tenta enviar feedback com nota 15 (deve retornar erro 400)" `
         -Uri $endpointSubmit `
         -Body @{
-            description = "Teste"
-            score = 15
+            descricao = "Teste"
+            nota = 15
         } `
         -ExpectedStatus 400
     
@@ -356,8 +363,8 @@ function Test-FeedbackController {
         -Description "Tenta enviar feedback com nota -1 (deve retornar erro 400)" `
         -Uri $endpointSubmit `
         -Body @{
-            description = "Teste"
-            score = -1
+            descricao = "Teste"
+            nota = -1
         } `
         -ExpectedStatus 400
     
@@ -369,7 +376,7 @@ function Test-FeedbackController {
         -Description "Tenta enviar feedback sem descricao (deve retornar erro 400)" `
         -Uri $endpointSubmit `
         -Body @{
-            score = 7
+            nota = 7
         } `
         -ExpectedStatus 400
     
@@ -381,7 +388,7 @@ function Test-FeedbackController {
         -Description "Tenta enviar feedback sem nota (deve retornar erro 400)" `
         -Uri $endpointSubmit `
         -Body @{
-            description = "Teste sem nota"
+            descricao = "Teste sem nota"
         } `
         -ExpectedStatus 400
     
@@ -393,9 +400,9 @@ function Test-FeedbackController {
         -Description "Envia feedback com urgencia LOW" `
         -Uri $endpointSubmit `
         -Body @{
-            description = "Feedback de teste"
-            score = 7
-            urgency = "LOW"
+            descricao = "Feedback de teste"
+            nota = 7
+            urgencia = "LOW"
         } `
         -ExpectedStatus 201
     
@@ -406,9 +413,9 @@ function Test-FeedbackController {
         -Description "Envia feedback com urgencia MEDIUM" `
         -Uri $endpointSubmit `
         -Body @{
-            description = "Feedback de teste"
-            score = 6
-            urgency = "MEDIUM"
+            descricao = "Feedback de teste"
+            nota = 6
+            urgencia = "MEDIUM"
         } `
         -ExpectedStatus 201
     
@@ -419,9 +426,9 @@ function Test-FeedbackController {
         -Description "Envia feedback com urgencia HIGH" `
         -Uri $endpointSubmit `
         -Body @{
-            description = "Feedback de teste"
-            score = 5
-            urgency = "HIGH"
+            descricao = "Feedback de teste"
+            nota = 5
+            urgencia = "HIGH"
         } `
         -ExpectedStatus 201
 }
@@ -439,9 +446,9 @@ function Test-NotifyAdminFunction {
     
     try {
         $criticalBody = @{
-            description = "ALERTA: Feedback critico para teste de notificacao"
-            score = 1
-            urgency = "HIGH"
+            descricao = "ALERTA: Feedback critico para teste de notificacao"
+            nota = 1
+            urgencia = "HIGH"
         } | ConvertTo-Json
         
         $response = Invoke-RestMethod -Uri $endpointSubmit `

@@ -57,11 +57,11 @@
             <version>12.29.0</version>
         </dependency>
 
-        <!-- Azure CosmosDB SQL API -->
+        <!-- Azure Table Storage -->
         <dependency>
             <groupId>com.azure</groupId>
-            <artifactId>azure-cosmos</artifactId>
-            <version>4.58.0</version>
+            <artifactId>azure-data-tables</artifactId>
+            <version>12.3.11</version>
         </dependency>
 
         <!-- Azure Service Bus Client -->

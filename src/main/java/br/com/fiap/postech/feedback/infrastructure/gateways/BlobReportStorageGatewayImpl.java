@@ -35,7 +35,7 @@ public class BlobReportStorageGatewayImpl implements ReportStorageGateway {
 
     @Inject
     public BlobReportStorageGatewayImpl(
-            @ConfigProperty(name = "azure.storage.connection-string") String storageConnectionString,
+            @ConfigProperty(name = "azure.blob.connection-string") String storageConnectionString,
             @ConfigProperty(name = "azure.storage.container-name", defaultValue = "weekly-reports") String containerName,
             ObjectMapper objectMapper) {
         this.storageConnectionString = storageConnectionString;
