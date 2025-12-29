@@ -1,8 +1,8 @@
 package br.com.fiap.postech.feedback.infrastructure.handlers;
 
+import br.com.fiap.postech.feedback.application.usecases.NotifyAdminUseCase;
 import br.com.fiap.postech.feedback.domain.entities.Feedback;
 import br.com.fiap.postech.feedback.domain.exceptions.NotificationException;
-import br.com.fiap.postech.feedback.domain.gateways.NotificationGateway;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.microsoft.azure.functions.*;
@@ -13,28 +13,28 @@ import jakarta.inject.Inject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-
 /**
- * Azure Function que processa mensagens críticas do Service Bus
- * e envia notificações aos administradores.
+ * Azure Function que processa mensagens críticas do Service Bus.
  * 
- * Responsabilidade única: Processar eventos críticos e notificar administradores
+ * Segue Clean Architecture:
+ * - Camada Infrastructure (handlers) → delega para Use Case (camada Application)
+ * - Use Case → usa Gateway (interface da camada Domain)
+ * 
+ * Responsabilidade única: Receber mensagem do Service Bus e delegar ao use case.
  */
 @ApplicationScoped
 public class NotifyAdminFunction {
 
     private static final Logger logger = LoggerFactory.getLogger(NotifyAdminFunction.class);
 
-    private final NotificationGateway notificationGateway;
+    private final NotifyAdminUseCase notifyAdminUseCase;
     private final ObjectMapper objectMapper;
 
     @Inject
     public NotifyAdminFunction(
-            NotificationGateway notificationGateway,
+            NotifyAdminUseCase notifyAdminUseCase,
             ObjectMapper objectMapper) {
-        this.notificationGateway = notificationGateway;
+        this.notifyAdminUseCase = notifyAdminUseCase;
         this.objectMapper = objectMapper;
     }
 
@@ -63,40 +63,19 @@ public class NotifyAdminFunction {
             ObjectMapper feedbackMapper = createFeedbackObjectMapper();
             Feedback criticalFeedback = feedbackMapper.readValue(message, Feedback.class);
 
-            logger.info("Feedback crítico recebido - ID: {}, Nota: {}, Urgência: {}",
-                    criticalFeedback.getId(),
-                    criticalFeedback.getScore().getValue(),
-                    criticalFeedback.getUrgency().getValue());
+            logger.info("Feedback crítico recebido do Service Bus - ID: {}", criticalFeedback.getId());
 
-            // Monta mensagem de notificação para o administrador
-            String notificationMessage = buildNotificationMessage(criticalFeedback);
+            // Delega processamento para o use case (seguindo Clean Architecture)
+            notifyAdminUseCase.execute(criticalFeedback);
 
-            // Envia notificação via gateway (pode ser email, log, etc)
-            notificationGateway.sendAdminNotification(notificationMessage);
+            logger.info("Notificação processada com sucesso pelo use case");
 
-            logger.info("Notificação enviada ao administrador com sucesso");
-
+        } catch (NotificationException e) {
+            logger.error("Erro ao processar notificação crítica: {}", e.getMessage(), e);
+            throw e;
         } catch (Exception e) {
+            logger.error("Erro inesperado ao processar mensagem do Service Bus: {}", e.getMessage(), e);
             throw new NotificationException("Falha ao processar notificação crítica", e);
         }
-    }
-
-    /**
-     * Constrói a mensagem de notificação formatada para o administrador
-     */
-    private String buildNotificationMessage(Feedback feedback) {
-        StringBuilder message = new StringBuilder();
-        message.append("🚨 ALERTA: Feedback Crítico Recebido\n\n");
-        message.append("ID: ").append(feedback.getId()).append("\n");
-        message.append("Descrição: ").append(feedback.getDescription()).append("\n");
-        message.append("Nota: ").append(feedback.getScore().getValue()).append("/10\n");
-        message.append("Urgência: ").append(feedback.getUrgency().getValue()).append("\n");
-        message.append("Data de Envio: ").append(
-                feedback.getCreatedAt() != null 
-                    ? feedback.getCreatedAt().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-                    : LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-        ).append("\n");
-        
-        return message.toString();
     }
 }
