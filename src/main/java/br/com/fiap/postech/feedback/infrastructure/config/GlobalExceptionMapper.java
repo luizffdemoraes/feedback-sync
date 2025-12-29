@@ -3,6 +3,7 @@ package br.com.fiap.postech.feedback.infrastructure.config;
 import br.com.fiap.postech.feedback.domain.exceptions.FeedbackDomainException;
 import br.com.fiap.postech.feedback.domain.exceptions.FeedbackPersistenceException;
 import br.com.fiap.postech.feedback.domain.exceptions.NotificationException;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.ext.ExceptionMapper;
@@ -54,6 +55,15 @@ public class GlobalExceptionMapper implements ExceptionMapper<Exception> {
             // O feedback já foi salvo, então retornamos sucesso
             return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
                     .entity(java.util.Map.of(ERROR_KEY, "Erro ao enviar notificação. O feedback foi salvo, mas a notificação falhou."))
+                    .type(MediaType.APPLICATION_JSON)
+                    .build();
+        }
+
+        // Erros de deserialização JSON (corpo inválido ou vazio)
+        if (exception instanceof JsonProcessingException) {
+            logger.warn("Erro ao processar JSON: {}", exception.getMessage());
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(java.util.Map.of(ERROR_KEY, "Corpo da requisição inválido ou malformado"))
                     .type(MediaType.APPLICATION_JSON)
                     .build();
         }

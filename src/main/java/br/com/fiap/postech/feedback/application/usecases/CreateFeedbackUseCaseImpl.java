@@ -4,6 +4,7 @@ import br.com.fiap.postech.feedback.application.dtos.requests.FeedbackRequest;
 import br.com.fiap.postech.feedback.application.dtos.responses.FeedbackResponse;
 import br.com.fiap.postech.feedback.domain.entities.Feedback;
 import br.com.fiap.postech.feedback.domain.exceptions.FeedbackDomainException;
+import br.com.fiap.postech.feedback.domain.exceptions.NotificationException;
 import br.com.fiap.postech.feedback.domain.gateways.FeedbackGateway;
 import br.com.fiap.postech.feedback.domain.gateways.NotificationGateway;
 import br.com.fiap.postech.feedback.domain.values.Score;
@@ -60,9 +61,22 @@ public class CreateFeedbackUseCaseImpl implements CreateFeedbackUseCase {
 
         feedbackGateway.save(feedback);
 
+        // Notificação não bloqueante - não falha a requisição se o Service Bus estiver indisponível
         if (feedback.isCritical()) {
             logger.info("Feedback crítico detectado, enviando notificação. ID: {}", feedback.getId());
-            notificationGateway.publishCritical(feedback);
+            try {
+                notificationGateway.publishCritical(feedback);
+                logger.info("Notificação crítica enviada com sucesso para o Service Bus");
+            } catch (NotificationException e) {
+                // Loga o erro mas não falha a requisição - o feedback já foi salvo
+                logger.error("Erro ao enviar notificação crítica (feedback já salvo). ID: {}, Erro: {}", 
+                    feedback.getId(), e.getMessage(), e);
+                // Não relança a exceção - permite que a requisição seja concluída com sucesso
+            } catch (Exception e) {
+                // Captura qualquer outra exceção inesperada
+                logger.error("Erro inesperado ao enviar notificação crítica (feedback já salvo). ID: {}, Erro: {}", 
+                    feedback.getId(), e.getMessage(), e);
+            }
         }
 
         return new FeedbackResponse(

@@ -52,6 +52,15 @@ public class FeedbackController {
     public Response submitFeedback(FeedbackRequest request) {
         logger.info("Recebendo feedback via REST endpoint");
         
+        // Validação de corpo vazio - retorna 400 Bad Request
+        if (request == null) {
+            logger.warn("Requisição recebida com corpo vazio");
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(java.util.Map.of("error", "Corpo da requisição é obrigatório"))
+                    .type(MediaType.APPLICATION_JSON)
+                    .build();
+        }
+        
         // Delegação direta ao use case - exceções são tratadas pelo GlobalExceptionMapper
         FeedbackResponse result = createFeedbackUseCase.execute(request);
         

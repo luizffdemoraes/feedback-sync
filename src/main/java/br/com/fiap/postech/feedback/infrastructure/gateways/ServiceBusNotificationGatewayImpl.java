@@ -42,20 +42,27 @@ public class ServiceBusNotificationGatewayImpl implements NotificationGateway {
     @PostConstruct
     void init() {
         try {
+            logger.info("Inicializando conexão com Service Bus. Tópico: {}", topicName);
             senderClient = new ServiceBusClientBuilder()
                     .connectionString(connectionString)
                     .sender()
                     .topicName(topicName)
                     .buildClient();
 
-            logger.info("Service Bus conectado ao tópico: {}", topicName);
+            logger.info("Service Bus conectado com sucesso ao tópico: {}", topicName);
         } catch (Exception e) {
-            throw new NotificationException("Falha ao conectar ao Service Bus", e);
+            logger.error("Falha ao conectar ao Service Bus. Tópico: {}, Erro: {}", topicName, e.getMessage(), e);
         }
     }
 
     @Override
     public void publishCritical(Object payload) {
+        // Verifica se o cliente está inicializado
+        if (senderClient == null) {
+            logger.warn("Service Bus não está disponível. Notificação crítica não será enviada.");
+            throw new NotificationException("Service Bus não está disponível");
+        }
+
         try {
             String jsonPayload = objectMapper.writeValueAsString(payload);
 
@@ -68,12 +75,20 @@ public class ServiceBusNotificationGatewayImpl implements NotificationGateway {
             logger.info("Mensagem crítica publicada no Service Bus. Tópico: {}", topicName);
 
         } catch (Exception e) {
-            throw new NotificationException("Falha ao publicar mensagem crítica", e);
+            logger.error("Erro ao publicar mensagem crítica no Service Bus. Tópico: {}, Erro: {}", 
+                topicName, e.getMessage(), e);
+            throw new NotificationException("Falha ao publicar mensagem crítica: " + e.getMessage(), e);
         }
     }
 
     @Override
     public void sendAdminNotification(String message) {
+        // Verifica se o cliente está inicializado
+        if (senderClient == null) {
+            logger.warn("Service Bus não está disponível. Notificação ao admin não será enviada.");
+            throw new NotificationException("Service Bus não está disponível");
+        }
+
         try {
             ServiceBusMessage serviceBusMessage = new ServiceBusMessage(message)
                     .setContentType("text/plain")
@@ -84,7 +99,8 @@ public class ServiceBusNotificationGatewayImpl implements NotificationGateway {
             logger.info("Notificação enviada ao admin via Service Bus");
 
         } catch (Exception e) {
-            throw new NotificationException("Falha ao enviar notificação ao admin", e);
+            logger.error("Erro ao enviar notificação ao admin via Service Bus. Erro: {}", e.getMessage(), e);
+            throw new NotificationException("Falha ao enviar notificação ao admin: " + e.getMessage(), e);
         }
     }
 
