@@ -76,9 +76,10 @@ function Test-Prerequisites {
     # Verificar se aplicação está rodando
     Write-Info "`nVerificando se aplicacao esta respondendo..."
     try {
-        # Tentar conectar na aplicação (qualquer resposta HTTP indica que está rodando)
-        $response = Invoke-WebRequest -Uri $baseUrl -Method GET -TimeoutSec 10 -ErrorAction Stop
-        Write-Success "  [OK] Aplicacao esta respondendo na porta 7071 (Status: $($response.StatusCode))"
+        # Usa o endpoint de health check do Quarkus
+        $healthCheckUrl = "$baseUrl/health"
+        $response = Invoke-WebRequest -Uri $healthCheckUrl -Method GET -TimeoutSec 10 -ErrorAction Stop
+        Write-Success "  [OK] Aplicacao esta respondendo na porta 7071 (Health Check: $($response.StatusCode))"
     } catch {
         $errorDetails = $_.Exception.Message
         # Verificar se é erro de conexão ou timeout
@@ -128,11 +129,26 @@ function Test-Prerequisites {
 function Test-ApplicationHealth {
     param([int]$MaxAttempts = 3, [int]$TimeoutSec = 10)
     
+    $healthCheckUrl = "$baseUrl/health"
+    
     for ($i = 1; $i -le $MaxAttempts; $i++) {
         try {
-            $response = Invoke-WebRequest -Uri $baseUrl -Method GET -TimeoutSec $TimeoutSec -ErrorAction Stop
-            return $true
+            # Usa o endpoint de health check do Quarkus
+            $response = Invoke-WebRequest -Uri $healthCheckUrl -Method GET -TimeoutSec $TimeoutSec -ErrorAction Stop
+            if ($response.StatusCode -eq 200) {
+                Write-Detail "  Health check OK (Status: 200)"
+                return $true
+            }
         } catch {
+            # Se recebeu resposta HTTP (mesmo erro), a aplicação está rodando
+            if ($_.Exception.Response) {
+                $statusCode = [int]$_.Exception.Response.StatusCode.value__
+                Write-Detail "  Aplicação respondendo no health check (Status: $statusCode)"
+                # Aceita qualquer resposta HTTP como indicativo de que está rodando
+                return $true
+            }
+            
+            # Se for erro de conexão/timeout, tenta novamente
             if ($i -lt $MaxAttempts) {
                 Write-Detail "  Tentativa $i/$MaxAttempts falhou, aguardando 3s..."
                 Start-Sleep -Seconds 3
