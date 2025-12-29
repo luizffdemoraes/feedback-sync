@@ -40,16 +40,36 @@ public class CosmosFeedbackGatewayImpl implements FeedbackGateway {
     @ConfigProperty(name = "azure.cosmos.container", defaultValue = "feedbacks")
     String containerName;
 
+    @ConfigProperty(name = "azure.cosmos.disable-ssl-verification", defaultValue = "false")
+    boolean disableSslVerification;
+
     private CosmosClient cosmosClient;
     private CosmosContainer container;
 
     @PostConstruct
     public void init() {
         try {
-            this.cosmosClient = new CosmosClientBuilder()
+            CosmosClientBuilder builder = new CosmosClientBuilder()
                     .endpoint(cosmosEndpoint)
-                    .key(cosmosKey)
-                    .buildClient();
+                    .key(cosmosKey);
+            
+            // Desabilitar verificação SSL para emulador local
+            if (disableSslVerification) {
+                // Para emulador local, configurar sistema para confiar em certificados auto-assinados
+                // Isso é apenas para desenvolvimento local - NUNCA usar em produção
+                try {
+                    // Configurar JVM para confiar em todos os certificados (apenas para desenvolvimento)
+                    System.setProperty("javax.net.ssl.trustStoreType", "Windows-ROOT");
+                    System.setProperty("com.azure.cosmos.directHttps.trustAllCertificates", "true");
+                    // Tentar configurar TrustManager para aceitar todos os certificados
+                    javax.net.ssl.HttpsURLConnection.setDefaultHostnameVerifier((hostname, session) -> true);
+                    logger.warn("SSL verification desabilitada para Cosmos DB emulador local - APENAS DESENVOLVIMENTO");
+                } catch (Exception e) {
+                    logger.warn("Não foi possível desabilitar SSL verification: {}", e.getMessage());
+                }
+            }
+            
+            this.cosmosClient = builder.buildClient();
 
             cosmosClient.createDatabaseIfNotExists(databaseName);
             CosmosDatabase database = cosmosClient.getDatabase(databaseName);
@@ -67,6 +87,11 @@ public class CosmosFeedbackGatewayImpl implements FeedbackGateway {
             logger.info("Cosmos DB conectado: {}/{}", databaseName, containerName);
 
         } catch (CosmosException e) {
+            logger.error("Erro do Cosmos DB ao conectar: {}", e.getMessage(), e);
+            throw new FeedbackPersistenceException(
+                String.format("Falha ao conectar ao Cosmos DB: %s", e.getMessage()), e);
+        } catch (Exception e) {
+            logger.error("Erro inesperado ao conectar ao Cosmos DB: {}", e.getMessage(), e);
             throw new FeedbackPersistenceException(
                 String.format("Falha ao conectar ao Cosmos DB: %s", e.getMessage()), e);
         }

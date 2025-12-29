@@ -7,6 +7,12 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Singleton;
 
+/**
+ * Configuração do Jackson para serialização/deserialização JSON.
+ * 
+ * Configuração simplificada - usa apenas @JsonProperty no FeedbackRequest.
+ * Campos em português: descricao, nota, urgencia
+ */
 @ApplicationScoped
 public class JacksonConfig {
 

@@ -40,7 +40,7 @@ public class CreateFeedbackUseCaseImpl implements CreateFeedbackUseCase {
 
     @Override
     public FeedbackResponse execute(FeedbackRequest request) {
-        logger.debug("Criando feedback: descricao={}, score={}, urgency={}", 
+        logger.debug("Criando feedback: descricao={}, nota={}, urgencia={}", 
             request.description(), request.score(), request.urgency());
 
         if (request.description() == null || request.description().isBlank()) {
