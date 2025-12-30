@@ -63,5 +63,5 @@ Write-Host "1. Verificar configurações no Azure Portal" -ForegroundColor White
 Write-Host "2. Configurar variáveis de ambiente (Application Settings)" -ForegroundColor White
 Write-Host "3. Testar endpoints: https://$FunctionAppName.azurewebsites.net/api/avaliacao" -ForegroundColor White
 Write-Host ""
-Write-Host "📖 Consulte GUIA_DEPLOY_AZURE_COMPLETO.md para mais detalhes" -ForegroundColor Cyan
+Write-Host "📖 Consulte GUIA_DEPLOY_AZURE.md para mais detalhes" -ForegroundColor Cyan
 

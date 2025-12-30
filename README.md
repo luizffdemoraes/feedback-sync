@@ -2,11 +2,13 @@
 
 Sistema de Feedback Serverless usando Azure Functions, Quarkus e Clean Architecture.
 
-## 🚀 Validação Local com Docker Compose
+**Repositório**: [https://github.com/luizffdemoraes/feedback-sync.git](https://github.com/luizffdemoraes/feedback-sync.git)
 
-Para validar a implementação localmente, consulte os guias:
+## 🚀 Guias Disponíveis
+
 - **[GUIA_EXECUCAO_LOCAL.md](./GUIA_EXECUCAO_LOCAL.md)** - Guia de execução local
 - **[GUIA_TESTE_COMPLETO.md](./GUIA_TESTE_COMPLETO.md)** - Guia completo de testes
+- **[GUIA_DEPLOY_AZURE.md](./GUIA_DEPLOY_AZURE.md)** - Guia completo de deploy no Azure
 
 ### Início Rápido
 
