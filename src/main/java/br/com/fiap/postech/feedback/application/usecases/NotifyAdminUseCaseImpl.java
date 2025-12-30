@@ -14,10 +14,15 @@ import java.time.format.DateTimeFormatter;
 /**
  * Implementação do caso de uso para notificar administradores sobre feedbacks críticos.
  * 
- * Responsabilidade: Processar feedback crítico e enviar notificação via gateway.
+ * Responsabilidade: Processar feedback crítico recebido do Service Bus e notificar via gateway.
  * 
- * Nota: O envio real de email é feito pelo Logic App que escuta o Service Bus.
- * Este use case processa e loga a notificação para monitoramento.
+ * Fluxo correto:
+ * 1. CreateFeedbackUseCase → publishCritical(feedback) → Service Bus (tópico: critical-feedbacks)
+ * 2. Service Bus trigger → NotifyAdminFunction → NotifyAdminUseCase (este método)
+ * 3. NotifyAdminUseCase → sendAdminNotification() → Service Bus (tópico: critical-feedbacks, subject: admin-notification)
+ * 4. Logic App consome mensagem com subject "admin-notification" e envia email
+ * 
+ * Segue padrão do projeto: Use Case chama Gateway (igual CreateFeedbackUseCase e GenerateWeeklyReportUseCase).
  */
 @ApplicationScoped
 public class NotifyAdminUseCaseImpl implements NotifyAdminUseCase {
@@ -33,22 +38,10 @@ public class NotifyAdminUseCaseImpl implements NotifyAdminUseCase {
 
     @Override
     public void execute(Feedback criticalFeedback) {
-        logger.info("Processando notificação crítica - ID: {}, Nota: {}, Urgência: {}",
-                criticalFeedback.getId(),
-                criticalFeedback.getScore().getValue(),
-                criticalFeedback.getUrgency().getValue());
-
         try {
-            // Monta mensagem formatada para o administrador
             String notificationMessage = buildNotificationMessage(criticalFeedback);
-            
-            // Envia notificação via gateway
-            // Nota: A implementação atual envia para Service Bus, mas o Logic App
-            // pegará a mensagem original e enviará o email real
             notificationGateway.sendAdminNotification(notificationMessage);
-            
-            logger.info("Notificação processada com sucesso. Logic App enviará email automaticamente.");
-
+            logger.debug("Notificação crítica processada - ID: {}", criticalFeedback.getId());
         } catch (NotificationException e) {
             logger.error("Erro ao processar notificação crítica: {}", e.getMessage(), e);
             throw e;
@@ -58,12 +51,9 @@ public class NotifyAdminUseCaseImpl implements NotifyAdminUseCase {
         }
     }
 
-    /**
-     * Constrói a mensagem de notificação formatada para o administrador.
-     */
     private String buildNotificationMessage(Feedback feedback) {
         StringBuilder message = new StringBuilder();
-        message.append("🚨 ALERTA: Feedback Crítico Recebido\n\n");
+        message.append("ALERTA: Feedback Crítico Recebido\n\n");
         message.append("ID: ").append(feedback.getId()).append("\n");
         message.append("Descrição: ").append(feedback.getDescription()).append("\n");
         message.append("Nota: ").append(feedback.getScore().getValue()).append("/10\n");
