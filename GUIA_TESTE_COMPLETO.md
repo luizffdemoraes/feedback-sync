@@ -23,9 +23,9 @@ docker info
 - Abra o Docker Desktop manualmente
 - Aguarde até o ícone na bandeja ficar verde (pode levar 1-2 minutos)
 
-**Ou execute:**
+**Verificar:**
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\check-docker.ps1
+docker info
 ```
 
 ---
@@ -60,9 +60,10 @@ servicebus-emulator    Up                  0.0.0.0:5672->5672/tcp, 0.0.0.0:8080-
 Start-Sleep -Seconds 30
 ```
 
-**Ou usar o script:**
+**Aguardar serviços ficarem prontos:**
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\start-local.ps1
+Start-Sleep -Seconds 30
+docker compose ps
 ```
 
 ---

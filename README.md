@@ -4,47 +4,29 @@ Sistema de Feedback Serverless usando Azure Functions, Quarkus e Clean Architect
 
 ## 🚀 Validação Local com Docker Compose
 
-Para validar a implementação localmente, consulte o guia completo: **[VALIDACAO_LOCAL.md](./VALIDACAO_LOCAL.md)**
+Para validar a implementação localmente, consulte os guias:
+- **[GUIA_EXECUCAO_LOCAL.md](./GUIA_EXECUCAO_LOCAL.md)** - Guia de execução local
+- **[GUIA_TESTE_COMPLETO.md](./GUIA_TESTE_COMPLETO.md)** - Guia completo de testes
 
 ### Início Rápido
 
-1. **Verifique/Corrija o Docker (se necessário)**:
+1. **Inicie os serviços Azure (Cosmos DB, Azurite, Service Bus)**:
    ```powershell
-   # Windows - Diagnóstico e correção automática
-   .\scripts\fix-docker.ps1
+   docker-compose up -d
    ```
 
-2. **Inicie os serviços Azure (Cosmos DB, Azurite, Service Bus)**:
-   ```powershell
-   # Windows
-   .\scripts\start-local.ps1
-   
-   # Linux/Mac
-   ./scripts/start-local.sh
-   ```
-
-3. **Execute a aplicação**:
+2. **Execute a aplicação**:
    ```bash
    .\mvnw.cmd quarkus:dev -Dquarkus.profile=local
    ```
 
-4. **Teste a API**:
+3. **Teste a API**:
    ```powershell
-   # Windows
-   .\scripts\test-api.ps1
-   
-   # Linux/Mac
-   ./scripts/test-api.sh
+   Invoke-RestMethod -Uri "http://localhost:7071/api/avaliacao" `
+     -Method Post `
+     -Body '{"descricao":"Teste","nota":8,"urgencia":"MEDIUM"}' `
+     -ContentType "application/json"
    ```
-
-### ⚠️ Problemas com Docker?
-
-Se você encontrar erros relacionados ao Docker, execute:
-```powershell
-.\scripts\fix-docker.ps1
-```
-
-Este script irá diagnosticar e tentar corrigir automaticamente os problemas do Docker.
 
 ---
 

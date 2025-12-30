@@ -14,32 +14,19 @@ Este guia explica como executar a aplicação localmente, separada dos serviços
 4. Testar a aplicação
 ```
 
-## 🎯 Opção 1: Script Automatizado (Recomendado)
-
-### Iniciar tudo de uma vez:
-
-```powershell
-.\scripts\iniciar-ambiente-local.ps1
-```
-
-Este script:
-- ✅ Verifica se Docker está rodando
-- ✅ Constrói a imagem customizada do Service Bus
-- ✅ Inicia todos os serviços Docker
-- ✅ Aguarda serviços estarem prontos (healthcheck)
-- ✅ Prepara ambiente para executar aplicação
-- ✅ Pergunta se deseja executar a aplicação agora
-
-### Executar apenas Docker (sem aguardar):
-
-```powershell
-.\scripts\iniciar-ambiente-local.ps1 -ApenasDocker
-```
+## 🎯 Opção 1: Execução Manual
 
 ### Executar apenas aplicação (assumindo Docker já está rodando):
 
 ```powershell
-.\executar-app.ps1
+.\scripts\executar-aplicacao.ps1
+```
+
+Ou manualmente:
+
+```powershell
+$env:QUARKUS_PROFILE = "local"
+.\mvnw.cmd quarkus:dev
 ```
 
 ## 🎯 Opção 2: Manual (Passo a Passo)
@@ -78,7 +65,7 @@ docker compose logs -f
 ### Passo 3: Executar Aplicação Localmente
 
 ```powershell
-.\executar-app.ps1
+.\scripts\executar-aplicacao.ps1
 ```
 
 Ou manualmente:
@@ -96,8 +83,11 @@ Listening on: http://localhost:7071
 ### Passo 4: Testar a Aplicação
 
 ```powershell
-# Validar todos os fluxos
-.\scripts\validar-fluxos.ps1
+# Testar endpoint de feedback
+Invoke-RestMethod -Uri "http://localhost:7071/api/avaliacao" `
+  -Method Post `
+  -Body '{"descricao":"Teste","nota":8,"urgencia":"MEDIUM"}' `
+  -ContentType "application/json"
 ```
 
 ## 📊 Verificar Status dos Serviços
@@ -139,12 +129,6 @@ curl http://localhost:10000/devstoreaccount1
 ### Parar serviços Docker:
 
 ```powershell
-.\scripts\parar-servicos.ps1
-```
-
-Ou manualmente:
-
-```powershell
 docker compose down
 ```
 
@@ -176,7 +160,7 @@ docker compose down
 docker compose down -v
 
 # Reiniciar
-.\scripts\iniciar-ambiente-local.ps1
+docker compose up -d
 ```
 
 ## 🐛 Troubleshooting
@@ -230,38 +214,39 @@ docker info
 
 | Script | Descrição |
 |--------|-----------|
-| `.\scripts\iniciar-ambiente-local.ps1` | Inicia Docker e prepara para executar aplicação |
-| `.\executar-app.ps1` | Executa apenas a aplicação (assume Docker rodando) |
-| `.\scripts\parar-servicos.ps1` | Para serviços Docker |
-| `.\scripts\validar-fluxos.ps1` | Valida todos os fluxos da aplicação |
-| `.\scripts\verificar-logs.ps1` | Ver logs dos serviços Docker |
+| `.\scripts\executar-aplicacao.ps1` | Executa apenas a aplicação (assume Docker rodando) |
+| `.\scripts\implantar-azure.ps1` | Script para implantação no Azure |
+| `.\scripts\testar-aplicacao.ps1` | Script para testar a aplicação completa |
 
 ## 🎯 Resumo Rápido
 
 **Para começar do zero:**
 ```powershell
-.\scripts\iniciar-ambiente-local.ps1
+docker compose up -d
+.\scripts\executar-aplicacao.ps1
 ```
 
 **Se Docker já está rodando:**
 ```powershell
-.\executar-app.ps1
+.\scripts\executar-aplicacao.ps1
 ```
 
 **Para testar:**
 ```powershell
-.\scripts\validar-fluxos.ps1
+Invoke-RestMethod -Uri "http://localhost:7071/api/avaliacao" `
+  -Method Post `
+  -Body '{"descricao":"Teste","nota":8,"urgencia":"MEDIUM"}' `
+  -ContentType "application/json"
 ```
 
 **Para parar:**
 ```powershell
 # Parar aplicação: Ctrl+C
-# Parar Docker: .\scripts\parar-servicos.ps1
+# Parar Docker: docker compose down
 ```
 
 ## 📚 Referências
 
-- [Guia de Correção do Service Bus](GUIA_SERVICEBUS_FIX.md)
-- [Validação Local](VALIDACAO_LOCAL.md)
+- [Guia Completo de Teste](GUIA_TESTE_COMPLETO.md)
 - [Docker Compose Documentation](https://docs.docker.com/compose/)
 

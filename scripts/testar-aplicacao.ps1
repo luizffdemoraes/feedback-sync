@@ -94,7 +94,7 @@ function Test-Prerequisites {
                 # Erro de conexão (aplicação não está rodando)
                 Write-Error "  [X] Aplicacao nao esta respondendo em $baseUrl"
                 Write-Warning "  Erro de conexao: Nao foi possivel conectar"
-                Write-Warning "  Certifique-se de que executar-app.ps1 esta rodando"
+                Write-Warning "  Certifique-se de que executar-aplicacao.ps1 esta rodando"
                 Write-Info "  Dica: Procure por 'Listening on: http://localhost:7071' nos logs da aplicacao"
                 $allOk = $false
             } elseif ($webException.Status -eq [System.Net.WebExceptionStatus]::Timeout) {
@@ -191,7 +191,7 @@ function Invoke-FunctionTest {
             }
             $script:testResults += $testResult
             Write-Error "  [X] ERRO: Aplicação não está respondendo"
-            Write-Warning "  Dica: Execute 'executar-app.ps1' para reiniciar a aplicação"
+            Write-Warning "  Dica: Execute 'executar-aplicacao.ps1' para reiniciar a aplicação"
             return $testResult
         }
     }
@@ -308,7 +308,7 @@ function Invoke-FunctionTest {
                     if ($webEx.Status -eq [System.Net.WebExceptionStatus]::ConnectFailure) {
                         $testResult.Message = "Erro de conexão: Aplicação não está respondendo. Verifique se a aplicação está rodando."
                         Write-Error "  [X] ERRO: $($testResult.Message)"
-                        Write-Warning "  Dica: Execute 'executar-app.ps1' para iniciar a aplicação"
+                        Write-Warning "  Dica: Execute 'executar-aplicacao.ps1' para iniciar a aplicação"
                     } elseif ($webEx.Status -eq [System.Net.WebExceptionStatus]::Timeout) {
                         $testResult.Message = "Timeout: A requisição excedeu $TimeoutSeconds segundos"
                         Write-Error "  [X] ERRO: $($testResult.Message)"

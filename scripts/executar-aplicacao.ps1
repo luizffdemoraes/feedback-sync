@@ -39,8 +39,7 @@ try {
     if (-not $todosRodando) {
         Write-Host ""
         Write-Host "ATENCAO: Nem todos os containers estao rodando!" -ForegroundColor Yellow
-        Write-Host "   Execute: .\scripts\iniciar-ambiente-local.ps1" -ForegroundColor White
-        Write-Host "   Ou: docker compose up -d" -ForegroundColor White
+        Write-Host "   Execute: docker compose up -d" -ForegroundColor White
         Write-Host ""
         Write-Host "Deseja continuar mesmo assim? (S/N)" -ForegroundColor Yellow
         $continuar = Read-Host
