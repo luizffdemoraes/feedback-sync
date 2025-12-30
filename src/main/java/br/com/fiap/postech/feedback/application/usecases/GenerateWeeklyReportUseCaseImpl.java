@@ -20,6 +20,20 @@ import java.util.Map;
  * 
  * Responsabilidade: Orquestrar a coleta de dados, cálculo de métricas
  * e persistência do relatório.
+ * 
+ * Fluxo de execução:
+ * 1. Calcula período: semana atual (segunda-feira até hoje)
+ *    - Busca a segunda-feira da semana atual
+ *    - Período vai até hoje para incluir feedbacks recentes
+ * 2. Busca feedbacks do período via FeedbackGateway
+ * 3. Calcula métricas:
+ *    - Média das notas
+ *    - Total de avaliações
+ *    - Avaliações por dia
+ *    - Avaliações por urgência (LOW, MEDIUM, HIGH)
+ * 4. Monta estrutura JSON com todos os dados
+ * 5. Salva relatório no Blob Storage via ReportStorageGateway
+ * 6. Retorna WeeklyReportResponse com métricas e URL do relatório
  */
 @ApplicationScoped
 public class GenerateWeeklyReportUseCaseImpl implements GenerateWeeklyReportUseCase {
@@ -37,14 +51,22 @@ public class GenerateWeeklyReportUseCaseImpl implements GenerateWeeklyReportUseC
         this.reportStorageGateway = reportStorageGateway;
     }
 
+    /**
+     * Executa a geração do relatório semanal.
+     * 
+     * Calcula o período da semana atual (segunda-feira até hoje) e busca
+     * todos os feedbacks desse período. Calcula métricas consolidadas e
+     * salva o relatório em formato JSON no Blob Storage.
+     * 
+     * @return WeeklyReportResponse com dados do relatório gerado
+     */
     @Override
     public WeeklyReportResponse execute() {
         logger.info("Iniciando geração de relatório semanal");
 
         LocalDate today = LocalDate.now();
-        LocalDate lastMonday = today.minusWeeks(1)
-                .with(TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY));
-        LocalDate lastSunday = lastMonday.plusDays(6);
+        LocalDate lastMonday = today.with(TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY));
+        LocalDate lastSunday = today;
 
         Instant startOfWeek = lastMonday.atStartOfDay(ZoneId.systemDefault()).toInstant();
         Instant endOfWeek = lastSunday.atTime(23, 59, 59).atZone(ZoneId.systemDefault()).toInstant();
