@@ -1,0 +1,43 @@
+{
+  "resourceGroup": "feedback-rg",
+  "location": "brazilsouth",
+  "storageAccount": {
+    "name": "feedbackstorage<seu-nome-unico>",
+    "sku": "Standard_LRS",
+    "kind": "StorageV2",
+    "enableTableStorage": true
+  },
+  "serviceBus": {
+    "namespace": "feedback-sb-<seu-nome-unico>",
+    "sku": "Standard",
+    "topics": [
+      {
+        "name": "critical-feedbacks",
+        "subscriptions": [
+          {
+            "name": "admin-notifications"
+          }
+        ]
+      }
+    ]
+  },
+  "functionApp": {
+    "name": "feedback-function-<seu-nome-unico>",
+    "runtime": "java",
+    "runtimeVersion": "21",
+    "functionsVersion": "4",
+    "osType": "Linux",
+    "plan": "Consumption"
+  },
+  "applicationSettings": {
+    "AZURE_STORAGE_CONNECTION_STRING": "<obter-do-portal>",
+    "AzureWebJobsStorage": "<mesmo-valor-acima>",
+    "AZURE_SERVICEBUS_CONNECTION_STRING": "<obter-do-portal>",
+    "AzureServiceBusConnection": "<mesmo-valor-acima>",
+    "FUNCTIONS_WORKER_RUNTIME": "java",
+    "FUNCTIONS_EXTENSION_VERSION": "~4",
+    "quarkus.log.level": "INFO",
+    "app.environment": "production"
+  }
+}
+
