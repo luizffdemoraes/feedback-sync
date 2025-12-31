@@ -134,7 +134,7 @@ param(
     [string]$Location = "brazilsouth",
     
     [Parameter(Mandatory=$true)]
-    [string]$Suffix  # Sufixo único para nomes (ex: "dev", "prod", seu nome)
+    [string]$Suffix  # Sufixo único para nomes (ex: "prod", "dev", seu nome)
 )
 
 $ErrorActionPreference = "Stop"
@@ -221,7 +221,7 @@ Write-Host "`n💡 Guarde estas informações para configurar as variáveis de a
 
 **Uso:**
 ```powershell
-.\criar-recursos-azure.ps1 -ResourceGroupName "feedback-rg" -Location "brazilsouth" -Suffix "dev"
+.\criar-recursos-azure.ps1 -ResourceGroupName "feedback-rg" -Location "brazilsouth" -Suffix "prod"
 ```
 
 ### Opção 2: Criar Manualmente via Portal Azure

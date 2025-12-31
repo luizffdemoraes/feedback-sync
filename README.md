@@ -96,25 +96,23 @@ O sistema implementa **duas funções serverless** seguindo o princípio de **Re
 
 ### 🔔 NotifyAdminFunction
 
-**Tipo**: Service Bus Trigger  
-**Responsabilidade**: Processar notificações críticas de feedbacks
+**Tipo**: Queue Trigger  
+**Responsabilidade**: Processar notificações críticas de feedbacks da fila
 
 **Fluxo:**
-1. Recebe mensagem do tópico `critical-feedbacks` do Azure Service Bus
+1. Recebe mensagem da fila `critical-feedbacks` do Azure Queue Storage
 2. Deserializa o feedback crítico (nota ≤ 3)
-3. Envia notificação para administradores via e-mail
+3. Envia notificação para administradores via SendGrid
 4. Registra logs de processamento
 
 **Configuração:**
-- **Tópico**: `critical-feedbacks`
-- **Subscription**: `admin-notifications`
-- **Trigger**: Automático quando feedback crítico é publicado
+- **Fila**: `critical-feedbacks`
+- **Trigger**: Automático quando mensagem é publicada na fila
+- **Integração**: Azure Queue Storage (trigger) + SendGrid (envio de emails)
 
-**Dados da Notificação:**
-- Descrição do feedback
-- Urgência (LOW, MEDIUM, HIGH)
-- Data de envio
-- Nota da avaliação
+**Integração com Recursos Azure:**
+- ✅ **Queue Storage** - Fila de mensagens críticas
+- ✅ **SendGrid** - Envio de emails
 
 ### 📈 WeeklyReportFunction
 
@@ -149,7 +147,7 @@ O sistema implementa **duas funções serverless** seguindo o princípio de **Re
 ![Quarkus](https://img.shields.io/badge/Quarkus-4695EB?style=for-the-badge&logo=quarkus&logoColor=white)
 ![Azure Functions](https://img.shields.io/badge/Azure_Functions-0062AD?style=for-the-badge&logo=azure-functions&logoColor=white)
 ![Azure Storage](https://img.shields.io/badge/Azure_Storage-0078D4?style=for-the-badge&logo=microsoft-azure&logoColor=white)
-![Azure Service Bus](https://img.shields.io/badge/Azure_Service_Bus-0078D4?style=for-the-badge&logo=microsoft-azure&logoColor=white)
+![SendGrid](https://img.shields.io/badge/SendGrid-1A82E2?style=for-the-badge&logo=sendgrid&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
 
 ### Stack Técnica
@@ -159,7 +157,7 @@ O sistema implementa **duas funções serverless** seguindo o princípio de **Re
 * **Serverless**: Azure Functions (Consumption Plan)
 * **Persistência**: Azure Table Storage (feedbacks)
 * **Armazenamento**: Azure Blob Storage (relatórios)
-* **Mensageria**: Azure Service Bus (notificações)
+* **Notificações**: SendGrid (envio de emails)
 * **Build**: Maven 3.8+
 * **Testes**: JUnit 5, Mockito, JaCoCo
 
@@ -185,8 +183,6 @@ feedback-sync/
 │   │   │       │       ├── CreateFeedbackUseCaseImpl.java
 │   │   │       │       ├── GenerateWeeklyReportUseCase.java
 │   │   │       │       ├── GenerateWeeklyReportUseCaseImpl.java
-│   │   │       │       ├── NotifyAdminUseCase.java
-│   │   │       │       └── NotifyAdminUseCaseImpl.java
 │   │   │       ├── domain/              # Camada de Domínio
 │   │   │       │   ├── entities/
 │   │   │       │   │   └── Feedback.java
@@ -214,7 +210,7 @@ feedback-sync/
 │   │   │           │   └── FeedbackDeserializer.java
 │   │   │           ├── gateways/
 │   │   │           │   ├── TableStorageFeedbackGatewayImpl.java
-│   │   │           │   ├── ServiceBusNotificationGatewayImpl.java
+│   │   │           │   ├── EmailNotificationGatewayImpl.java
 │   │   │           │   └── BlobReportStorageGatewayImpl.java
 │   │   │           └── mappers/
 │   │   │               └── TableStorageFeedbackMapper.java
@@ -261,13 +257,12 @@ O projeto segue os princípios da **Clean Architecture**, garantindo:
 * **Use Cases**:
   - `CreateFeedbackUseCase` - Criar feedback e notificar se crítico
   - `GenerateWeeklyReportUseCase` - Gerar relatório semanal
-  - `NotifyAdminUseCase` - Enviar notificação para administradores
 * **DTOs**: Requests e Responses
 
 #### 3. **Infrastructure** (Implementações)
 * **Controllers**: Endpoints REST (`FeedbackController`, `ReportController`)
 * **Handlers**: Azure Functions (`NotifyAdminFunction`, `WeeklyReportFunction`)
-* **Gateways**: Implementações concretas (Table Storage, Service Bus, Blob Storage)
+* **Gateways**: Implementações concretas (Table Storage, SendGrid, Blob Storage)
 * **Config**: Configurações (Exception Mapper, Jackson)
 
 ---
@@ -281,7 +276,7 @@ O projeto segue os princípios da **Clean Architecture**, garantindo:
 | **Function App** | Consumption Plan (Linux) | Host da aplicação serverless |
 | **Table Storage** | Standard LRS | Persistência de feedbacks |
 | **Blob Storage** | Standard LRS | Armazenamento de relatórios semanais |
-| **Service Bus** | Standard | Tópico para notificações críticas |
+| **SendGrid** | Free Tier | Envio de emails para notificações críticas |
 | **Application Insights** | Monitoramento | Logs, métricas e rastreamento |
 
 ---
@@ -308,13 +303,12 @@ graph TB
         end
         
         subgraph "Azure Functions"
-            NotifyFunc[🔔 NotifyAdminFunction<br/>Service Bus Trigger]
+            NotifyFunc[🔔 NotifyAdminFunction<br/>Queue Trigger]
             WeeklyFunc[📈 WeeklyReportFunction<br/>Timer Trigger CRON]
         end
         
         subgraph "Use Cases"
             CreateUC[CreateFeedbackUseCase]
-            NotifyUC[NotifyAdminUseCase]
             ReportUC[GenerateWeeklyReportUseCase]
         end
     end
@@ -322,28 +316,25 @@ graph TB
     subgraph "Azure Storage"
         TableStorage[(📋 Table Storage<br/>feedbacks)]
         BlobStorage[(📦 Blob Storage<br/>weekly-reports)]
+        QueueStorage[(📬 Queue Storage<br/>critical-feedbacks)]
     end
 
-    subgraph "Azure Service Bus"
-        ServiceBus[🚌 Service Bus<br/>Topic: critical-feedbacks<br/>Subscription: admin-notifications]
+    subgraph "Notificações"
+        SendGrid[📧 SendGrid<br/>Email Service]
+        Email[📧 E-mail<br/>Administradores]
     end
 
     subgraph "Monitoramento"
         AppInsights[📊 Application Insights<br/>Logs e Métricas]
     end
 
-    subgraph "Notificações"
-        Email[📧 E-mail<br/>Administradores]
-    end
-
     Estudante -->|POST /avaliacao| FeedbackCtrl
     FeedbackCtrl --> CreateUC
     CreateUC -->|Salvar| TableStorage
-    CreateUC -->|Se crítico| ServiceBus
-    
-    ServiceBus -->|Trigger| NotifyFunc
-    NotifyFunc --> NotifyUC
-    NotifyUC --> Email
+    CreateUC -->|Se crítico| QueueStorage
+    QueueStorage -->|Trigger| NotifyFunc
+    NotifyFunc --> SendGrid
+    SendGrid --> Email
     
     WeeklyFunc -->|Timer CRON| ReportUC
     ReportUC -->|Buscar| TableStorage
@@ -359,7 +350,8 @@ graph TB
     style FuncApp fill:#0078D4,color:#fff
     style TableStorage fill:#0078D4,color:#fff
     style BlobStorage fill:#0078D4,color:#fff
-    style ServiceBus fill:#0078D4,color:#fff
+    style QueueStorage fill:#0078D4,color:#fff
+    style SendGrid fill:#1A82E2,color:#fff
     style AppInsights fill:#0078D4,color:#fff
 ```
 
@@ -373,7 +365,7 @@ sequenceDiagram
     participant FeedbackGateway
     participant TableStorage
     participant NotificationGateway
-    participant ServiceBus
+    participant SendGrid
 
     Estudante->>FeedbackController: POST /avaliacao<br/>{descricao, nota, urgencia}
     
@@ -389,8 +381,8 @@ sequenceDiagram
     
     alt Feedback é crítico (nota ≤ 3)
         CreateFeedbackUseCase->>NotificationGateway: publishCritical(Feedback)
-        NotificationGateway->>ServiceBus: Publicar mensagem<br/>tópico: critical-feedbacks
-        ServiceBus-->>NotificationGateway: Mensagem publicada
+        NotificationGateway->>SendGrid: Enviar email<br/>ao administrador
+        SendGrid-->>NotificationGateway: Email enviado
         NotificationGateway-->>CreateFeedbackUseCase: Sucesso
     end
     
@@ -402,30 +394,22 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    participant ServiceBus
-    participant NotifyAdminFunction
-    participant NotifyAdminUseCase
+    participant CreateFeedbackUseCase
     participant NotificationGateway
-    participant EmailService
+    participant SendGrid
     participant Admin
 
-    Note over ServiceBus: Mensagem publicada no tópico<br/>critical-feedbacks
+    Note over CreateFeedbackUseCase: Feedback crítico criado<br/>(nota ≤ 3)
     
-    ServiceBus->>NotifyAdminFunction: Trigger<br/>Mensagem JSON (Feedback)
+    CreateFeedbackUseCase->>NotificationGateway: publishCritical(Feedback)
     
-    NotifyAdminFunction->>NotifyAdminFunction: Deserializar Feedback<br/>(FeedbackDeserializer)
+    NotificationGateway->>NotificationGateway: Preparar conteúdo do email<br/>(descrição, urgência, data)
     
-    NotifyAdminFunction->>NotifyAdminUseCase: execute(Feedback)
+    NotificationGateway->>SendGrid: Enviar email<br/>ao administrador
+    SendGrid->>Admin: 📧 E-mail de notificação<br/>ALERTA: Feedback Crítico
     
-    NotifyAdminUseCase->>NotifyAdminUseCase: Preparar dados<br/>(descrição, urgência, data)
-    
-    NotifyAdminUseCase->>NotificationGateway: sendAdminNotification(Feedback)
-    NotificationGateway->>EmailService: Enviar e-mail<br/>com dados do feedback crítico
-    EmailService->>Admin: 📧 E-mail de notificação
-    
-    NotificationGateway-->>NotifyAdminUseCase: Notificação enviada
-    NotifyAdminUseCase-->>NotifyAdminFunction: Sucesso
-    NotifyAdminFunction-->>ServiceBus: Processamento concluído
+    SendGrid-->>NotificationGateway: Email enviado (Status 200)
+    NotificationGateway-->>CreateFeedbackUseCase: Notificação enviada
 ```
 
 ### 📈 Diagrama de Sequência - Geração de Relatório Semanal
@@ -472,12 +456,12 @@ graph TB
     subgraph "Infrastructure Layer"
         Controllers[Controllers<br/>FeedbackController<br/>ReportController]
         Handlers[Azure Functions<br/>NotifyAdminFunction<br/>WeeklyReportFunction]
-        GatewaysImpl[Gateways Implementations<br/>TableStorageFeedbackGatewayImpl<br/>ServiceBusNotificationGatewayImpl<br/>BlobReportStorageGatewayImpl]
+        GatewaysImpl[Gateways Implementations<br/>TableStorageFeedbackGatewayImpl<br/>QueueNotificationGatewayImpl<br/>EmailNotificationGatewayImpl<br/>BlobReportStorageGatewayImpl]
         Config[Config<br/>GlobalExceptionMapper<br/>JacksonConfig]
     end
 
     subgraph "Application Layer"
-        UseCases[Use Cases<br/>CreateFeedbackUseCase<br/>GenerateWeeklyReportUseCase<br/>NotifyAdminUseCase]
+        UseCases[Use Cases<br/>CreateFeedbackUseCase<br/>GenerateWeeklyReportUseCase]
         DTOs[DTOs<br/>FeedbackRequest<br/>FeedbackResponse<br/>WeeklyReportResponse]
     end
 
@@ -526,18 +510,17 @@ graph LR
         
         subgraph "Infrastructure"
             TS[Table Storage<br/>Gateway]
-            SB[Service Bus<br/>Gateway]
+            NG[Email Notification<br/>Gateway]
             BS[Blob Storage<br/>Gateway]
         end
         
         subgraph "Azure Functions"
-            NF[NotifyAdmin<br/>Function]
             WF[WeeklyReport<br/>Function]
         end
         
         subgraph "External Services"
             AST[(Azure Table<br/>Storage)]
-            ASB[Azure Service<br/>Bus]
+            SG[SendGrid<br/>Email Service]
             ABS[(Azure Blob<br/>Storage)]
             AI[Application<br/>Insights]
         end
@@ -551,18 +534,15 @@ graph LR
     FB --> SC
     FB --> UR
     UC1 --> TS
-    UC1 --> SB
+    UC1 --> NG
     UC2 --> TS
     UC2 --> BS
-    UC3 --> SB
+    UC3 --> NG
     TS --> AST
-    SB --> ASB
+    NG --> SG
     BS --> ABS
-    ASB --> NF
-    NF --> UC3
     WF --> UC2
     REST -.-> AI
-    NF -.-> AI
     WF -.-> AI
 
     style REST fill:#4695EB,color:#fff
@@ -590,14 +570,12 @@ flowchart TD
     Save --> Check{Feedback crítico?<br/>nota ≤ 3}
     
     Check -->|Não| Success1[201 Created<br/>ID retornado]
-    Check -->|Sim| Publish[Publicar no Service Bus<br/>tópico: critical-feedbacks]
+    Check -->|Sim| Notify[Enviar email via SendGrid<br/>ao administrador]
     
-    Publish --> Success1
+    Notify --> Success1
     
-    Publish -.->|Mensagem| ServiceBus[Service Bus]
-    ServiceBus -.->|Trigger| NotifyFunc[NotifyAdminFunction]
-    NotifyFunc --> NotifyUC[NotifyAdminUseCase]
-    NotifyUC --> Email[Enviar e-mail<br/>para administradores]
+    Notify -.->|Email| SendGrid[SendGrid<br/>Email Service]
+    SendGrid -.->|Email| Admin[Administrador<br/>recebe email]
     
     Timer[Timer CRON<br/>Segunda 08:00] --> WeeklyFunc[WeeklyReportFunction]
     WeeklyFunc --> ReportUC[GenerateWeeklyReportUseCase]
@@ -653,11 +631,11 @@ erDiagram
         datetime lastModified
     }
     
-    SERVICE_BUS_TOPIC {
-        string topicName "critical-feedbacks"
-        string subscription "admin-notifications"
-        json message
-        datetime enqueuedTime
+    SENDGRID_EMAIL {
+        string toEmail "admin@example.com"
+        string subject "ALERTA: Feedback Crítico"
+        string content "JSON do feedback"
+        datetime sentAt
     }
 ```
 
@@ -683,7 +661,7 @@ graph TB
     subgraph "Azure Resources"
         Table[(Table Storage<br/>Acesso via<br/>Connection String)]
         Blob[(Blob Storage<br/>Acesso via<br/>Connection String)]
-        ServiceBus[Service Bus<br/>Acesso via<br/>Connection String]
+        SendGrid[SendGrid<br/>Acesso via<br/>API Key]
     end
 
     subgraph "Monitoramento"
@@ -697,7 +675,7 @@ graph TB
     Controller --> ConnStrings
     ConnStrings --> Table
     ConnStrings --> Blob
-    ConnStrings --> ServiceBus
+    ConnStrings --> SendGrid
     Controller -.->|Logs| AppInsights
     AppInsights -.-> Monitor
 
@@ -718,7 +696,7 @@ graph TB
 | 📈 | Função de Relatório |
 | 📋 | Table Storage |
 | 📦 | Blob Storage |
-| 🚌 | Service Bus |
+| 📧 | SendGrid |
 | 📊 | Application Insights |
 | 📧 | E-mail |
 | 👤 | Usuário/Cliente |
@@ -777,8 +755,6 @@ cd feedback-sync
 
 Isso iniciará:
 * **Azurite** (Table Storage + Blob Storage) - Portas 10000, 10002
-* **Service Bus Emulator** - Porta 5672
-* **SQL Server** (requerido pelo Service Bus) - Porta 1433
 
 ### 3. Execute a Aplicação Localmente
 
@@ -832,9 +808,8 @@ Execute o script de deploy:
 O script irá:
 1. Criar Resource Group
 2. Criar Storage Account (Table + Blob)
-3. Criar Service Bus (Tópico + Subscription)
-4. Criar Function App
-5. Configurar Application Settings
+3. Criar Function App
+4. Configurar Application Settings (incluindo SendGrid API Key)
 6. Fazer deploy da aplicação
 
 ### Deploy Manual
@@ -863,7 +838,9 @@ Consulte o guia completo: **[GUIA_DEPLOY_AZURE.md](./GUIA_DEPLOY_AZURE.md)**
 ```properties
 # Application Settings (Azure Portal)
 AZURE_STORAGE_CONNECTION_STRING=<connection-string>
-AZURE_SERVICEBUS_CONNECTION_STRING=<connection-string>
+SENDGRID_API_KEY=<your-sendgrid-api-key>
+ADMIN_EMAIL=<admin@example.com>
+SENDGRID_FROM_EMAIL=<noreply@feedback-sync.com>
 AzureWebJobsStorage=<storage-connection-string>
 ```
 
@@ -1037,7 +1014,7 @@ Content-Type: application/json
 | **Responsabilidade Única** | ✅ | Cada função tem responsabilidade específica |
 | **Deploy Automatizado** | ✅ | Script PowerShell + Azure Functions Maven Plugin |
 | **Monitoramento** | ✅ | Application Insights + Azure Monitor |
-| **Notificações Automáticas** | ✅ | Service Bus + NotifyAdminFunction |
+| **Notificações Automáticas** | ✅ | SendGrid (envio direto de email) |
 | **Relatório Semanal** | ✅ | Timer Trigger + WeeklyReportFunction |
 | **Segurança** | ✅ | Connection Strings criptografadas, HTTPS |
 | **Governança** | ✅ | Resource Groups, Tags, Policies |
@@ -1069,11 +1046,11 @@ Content-Type: application/json
 
 ---
 
-## 🔄 Fluxo de Mensagens Service Bus
+## 🔄 Fluxo de Notificações
 
-| Evento | Tópico | Subscription | Ação |
-|--------|--------|--------------|------|
-| **Feedback Crítico** | `critical-feedbacks` | `admin-notifications` | NotifyAdminFunction processa e envia e-mail |
+| Evento | Gateway | Serviço | Ação |
+|--------|---------|---------|------|
+| **Feedback Crítico** | EmailNotificationGateway | SendGrid | Envia email diretamente ao administrador |
 
 ---
 

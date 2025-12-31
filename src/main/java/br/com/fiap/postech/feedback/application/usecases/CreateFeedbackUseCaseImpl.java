@@ -6,7 +6,7 @@ import br.com.fiap.postech.feedback.domain.entities.Feedback;
 import br.com.fiap.postech.feedback.domain.exceptions.FeedbackDomainException;
 import br.com.fiap.postech.feedback.domain.exceptions.NotificationException;
 import br.com.fiap.postech.feedback.domain.gateways.FeedbackGateway;
-import br.com.fiap.postech.feedback.domain.gateways.NotificationGateway;
+import br.com.fiap.postech.feedback.domain.gateways.QueueNotificationGateway;
 import br.com.fiap.postech.feedback.domain.values.Score;
 import br.com.fiap.postech.feedback.domain.values.Urgency;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -21,7 +21,7 @@ import org.slf4j.LoggerFactory;
  * - Validar dados de entrada
  * - Criar entidade de domínio
  * - Persistir feedback
- * - Notificar se crítico
+ * - Notificar admin se crítico (via email direto)
  */
 @ApplicationScoped
 public class CreateFeedbackUseCaseImpl implements CreateFeedbackUseCase {
@@ -29,14 +29,14 @@ public class CreateFeedbackUseCaseImpl implements CreateFeedbackUseCase {
     private static final Logger logger = LoggerFactory.getLogger(CreateFeedbackUseCaseImpl.class);
 
     private final FeedbackGateway feedbackGateway;
-    private final NotificationGateway notificationGateway;
+    private final QueueNotificationGateway queueNotificationGateway;
 
     @Inject
     public CreateFeedbackUseCaseImpl(
             FeedbackGateway feedbackGateway,
-            NotificationGateway notificationGateway) {
+            QueueNotificationGateway queueNotificationGateway) {
         this.feedbackGateway = feedbackGateway;
-        this.notificationGateway = notificationGateway;
+        this.queueNotificationGateway = queueNotificationGateway;
     }
 
     @Override
@@ -61,17 +61,19 @@ public class CreateFeedbackUseCaseImpl implements CreateFeedbackUseCase {
 
         feedbackGateway.save(feedback);
 
-        // Notificação não bloqueante - não falha a requisição se o Service Bus estiver indisponível
+        // Notificação não bloqueante - publica na fila se crítico
         if (feedback.isCritical()) {
             try {
-                notificationGateway.publishCritical(feedback);
+                // Publica na fila Azure Queue Storage para processamento assíncrono
+                queueNotificationGateway.publishCritical(feedback);
+                logger.debug("Notificação crítica publicada na fila - ID: {}", feedback.getId());
             } catch (NotificationException e) {
                 // Loga o erro mas não falha a requisição - o feedback já foi salvo
-                logger.error("Erro ao enviar notificação crítica (feedback já salvo). ID: {}, Erro: {}", 
+                logger.error("Erro ao publicar notificação crítica (feedback já salvo). ID: {}, Erro: {}", 
                     feedback.getId(), e.getMessage());
             } catch (Exception e) {
                 // Captura qualquer outra exceção inesperada
-                logger.error("Erro inesperado ao enviar notificação crítica (feedback já salvo). ID: {}, Erro: {}", 
+                logger.error("Erro inesperado ao publicar notificação crítica (feedback já salvo). ID: {}, Erro: {}", 
                     feedback.getId(), e.getMessage());
             }
         }

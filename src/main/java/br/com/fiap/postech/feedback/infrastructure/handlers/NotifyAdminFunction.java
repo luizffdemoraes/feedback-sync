@@ -1,10 +1,9 @@
 package br.com.fiap.postech.feedback.infrastructure.handlers;
 
-import br.com.fiap.postech.feedback.application.usecases.NotifyAdminUseCase;
 import br.com.fiap.postech.feedback.domain.entities.Feedback;
 import br.com.fiap.postech.feedback.domain.exceptions.NotificationException;
+import br.com.fiap.postech.feedback.domain.gateways.EmailNotificationGateway;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.microsoft.azure.functions.*;
 import com.microsoft.azure.functions.annotation.*;
 
@@ -14,68 +13,93 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Azure Function que processa mensagens críticas do Service Bus.
+ * Azure Function que processa notificações críticas de feedbacks.
  * 
- * Segue Clean Architecture:
- * - Camada Infrastructure (handlers) → delega para Use Case (camada Application)
- * - Use Case → usa Gateway (interface da camada Domain)
+ * Tipo: Queue Trigger
+ * Responsabilidade única: Processar mensagens da fila e enviar emails via SendGrid
  * 
- * Responsabilidade única: Receber mensagem do Service Bus e delegar ao use case.
+ * Fluxo:
+ * 1. CreateFeedbackUseCase publica feedback crítico na fila Azure Queue Storage
+ * 2. Azure Queue Storage dispara esta função automaticamente
+ * 3. Função deserializa o feedback e envia email via SendGrid
+ * 
+ * Integração com Recursos Azure:
+ * - Azure Queue Storage (trigger)
+ * - SendGrid (envio de emails)
  */
 @ApplicationScoped
 public class NotifyAdminFunction {
 
     private static final Logger logger = LoggerFactory.getLogger(NotifyAdminFunction.class);
 
-    private final NotifyAdminUseCase notifyAdminUseCase;
+    private final EmailNotificationGateway emailGateway;
     private final ObjectMapper objectMapper;
 
     @Inject
     public NotifyAdminFunction(
-            NotifyAdminUseCase notifyAdminUseCase,
+            EmailNotificationGateway emailGateway,
             ObjectMapper objectMapper) {
-        this.notifyAdminUseCase = notifyAdminUseCase;
+        this.emailGateway = emailGateway;
         this.objectMapper = objectMapper;
-    }
-
-    private ObjectMapper createFeedbackObjectMapper() {
-        ObjectMapper mapper = objectMapper.copy();
-        SimpleModule module = new SimpleModule();
-        module.addDeserializer(Feedback.class, new FeedbackDeserializer());
-        mapper.registerModule(module);
-        return mapper;
     }
 
     @FunctionName("notifyAdmin")
     public void run(
-            @ServiceBusTopicTrigger(
+            @QueueTrigger(
                     name = "message",
-                    topicName = "critical-feedbacks",
-                    subscriptionName = "admin-notifications",
-                    connection = "AzureServiceBusConnection"
+                    queueName = "critical-feedbacks",
+                    connection = "AzureWebJobsStorage"
             ) String message,
             final ExecutionContext context) {
 
-        logger.info("Processando mensagem crítica do Service Bus");
+        logger.info("Azure Function 'notifyAdmin' disparada - Processando notificação crítica");
+        logger.debug("Mensagem recebida da fila: {}", message);
 
         try {
-            // Parse da mensagem JSON do Service Bus (usa deserializador customizado)
-            ObjectMapper feedbackMapper = createFeedbackObjectMapper();
-            Feedback criticalFeedback = feedbackMapper.readValue(message, Feedback.class);
+            // Tentar deserializar como Feedback
+            Feedback feedback = objectMapper.readValue(message, Feedback.class);
+            
+            logger.info("Feedback crítico recebido - ID: {}, Nota: {}", 
+                feedback.getId(), feedback.getScore().getValue());
 
-            logger.info("Feedback crítico recebido do Service Bus - ID: {}", criticalFeedback.getId());
+            // Enviar email via SendGrid
+            emailGateway.sendAdminNotification(buildEmailContent(feedback));
+            
+            logger.info("Notificação enviada com sucesso para o administrador - Feedback ID: {}", 
+                feedback.getId());
 
-            // Delega processamento para o use case (seguindo Clean Architecture)
-            notifyAdminUseCase.execute(criticalFeedback);
-
-            logger.info("Notificação processada com sucesso pelo use case");
-
-        } catch (NotificationException e) {
-            logger.error("Erro ao processar notificação crítica: {}", e.getMessage(), e);
-            throw e;
+        } catch (com.fasterxml.jackson.databind.exc.MismatchedInputException e) {
+            // Se não for um Feedback, tratar como mensagem simples
+            logger.warn("Mensagem não é um Feedback, tratando como mensagem simples");
+            try {
+                emailGateway.sendAdminNotification(message);
+                logger.info("Notificação simples enviada com sucesso");
+            } catch (NotificationException ex) {
+                logger.error("Erro ao enviar notificação simples: {}", ex.getMessage(), ex);
+                throw new RuntimeException("Falha ao enviar notificação", ex);
+            }
         } catch (Exception e) {
-            logger.error("Erro inesperado ao processar mensagem do Service Bus: {}", e.getMessage(), e);
-            throw new NotificationException("Falha ao processar notificação crítica", e);
+            logger.error("Erro ao processar notificação crítica: {}", e.getMessage(), e);
+            throw new RuntimeException("Falha ao processar notificação crítica", e);
         }
+    }
+
+    /**
+     * Constrói conteúdo do email a partir do feedback.
+     */
+    private String buildEmailContent(Feedback feedback) {
+        StringBuilder content = new StringBuilder();
+        content.append("ALERTA: Feedback Crítico Recebido\n\n");
+        content.append("Detalhes do Feedback:\n");
+        content.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n");
+        content.append("ID: ").append(feedback.getId()).append("\n");
+        content.append("Descrição: ").append(feedback.getDescription()).append("\n");
+        content.append("Nota: ").append(feedback.getScore().getValue()).append("/10\n");
+        content.append("Urgência: ").append(feedback.getUrgency().toString()).append("\n");
+        content.append("Data de Envio: ").append(feedback.getCreatedAt()).append("\n");
+        content.append("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+        content.append("Este é um email automático do sistema de feedback.\n");
+        content.append("Por favor, analise este feedback crítico com urgência.\n");
+        return content.toString();
     }
 }

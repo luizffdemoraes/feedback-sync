@@ -5,16 +5,11 @@
     "FUNCTIONS_WORKER_RUNTIME": "java",
     "FUNCTIONS_EXTENSION_VERSION": "~4",
 
-    "azure.cosmos.endpoint": "https://localhost:8081",
-    "azure.cosmos.key": "C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==",
-    "azure.cosmos.database": "feedback-db",
-    "azure.cosmos.container": "feedbacks",
+    "sendgrid.api.key": "",
+    "admin.email": "admin@example.com",
+    "sendgrid.from.email": "noreply@feedback-sync.com",
 
-    "azure.servicebus.connection-string": "Endpoint=sb://localhost:5672;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=test",
-    "AzureServiceBusConnection": "Endpoint=sb://localhost:5672;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=test",
-    "azure.servicebus.topic-name": "critical-feedbacks",
-
-    "azure.storage.connection-string": "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://localhost:10000/devstoreaccount1;",
+    "azure.storage.connection-string": "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;TableEndpoint=http://localhost:10002/devstoreaccount1;BlobEndpoint=http://localhost:10000/devstoreaccount1;QueueEndpoint=http://localhost:10001/devstoreaccount1;",
     "azure.storage.container-name": "weekly-reports",
 
     "APP_ENVIRONMENT": "local",

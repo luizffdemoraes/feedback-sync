@@ -4,8 +4,7 @@
 
 ```
 1. Docker Desktop → 2. Docker Compose → 3. Aplicação → 4. Testes
-   (Serviços Azure)    (Cosmos, Azurite,    (Quarkus)      (API)
-                       Service Bus)
+   (Serviços Azure)    (Azurite)            (Quarkus)      (API)
 ```
 
 ## 🚀 Passo a Passo Completo
@@ -32,10 +31,8 @@ docker info
 
 ### **PASSO 2: Iniciar Serviços Azure (Docker Compose)**
 
-Este passo inicia os 3 serviços Azure em containers:
-- **Cosmos DB Emulator** (banco de dados)
-- **Azurite** (armazenamento de blobs)
-- **Service Bus Emulator** (fila de mensagens)
+Este passo inicia o serviço Azure em container:
+- **Azurite** (Table Storage + Blob Storage)
 
 **Execute:**
 ```powershell
@@ -47,12 +44,10 @@ docker-compose up -d
 docker ps
 ```
 
-Você deve ver 3 containers:
+Você deve ver 1 container:
 ```
 NAMES                  STATUS              PORTS
-cosmos-emulator        Up                  0.0.0.0:8081->8081/tcp
-azurite                Up                  0.0.0.0:10000->10000/tcp
-servicebus-emulator    Up                  0.0.0.0:5672->5672/tcp, 0.0.0.0:8080->8080/tcp
+azurite                Up                  0.0.0.0:10000->10000/tcp, 0.0.0.0:10001->10001/tcp, 0.0.0.0:10002->10002/tcp
 ```
 
 **Aguardar serviços ficarem prontos:**
@@ -117,9 +112,9 @@ Invoke-RestMethod -Uri "http://localhost:7071/api/avaliacao" `
 ```
 
 **O que deve acontecer:**
-1. ✅ Feedback é salvo no Cosmos DB
-2. ✅ Notificação é enviada ao Service Bus (porque nota ≤ 3)
-3. ✅ Função `NotifyAdminFunction` processa a mensagem
+1. ✅ Feedback é salvo no Table Storage (Azurite)
+2. ✅ Notificação é enviada via SendGrid (porque nota ≤ 3)
+3. ✅ Email é enviado diretamente ao administrador
 
 #### Teste 3: Validação - Nota Inválida
 ```powershell
@@ -135,19 +130,17 @@ Invoke-RestMethod -Uri "http://localhost:7071/api/avaliacao" `
 
 ## 🔍 Verificações
 
-### Verificar se os dados foram salvos no Cosmos DB
+### Verificar se os dados foram salvos no Table Storage
 
-1. Acesse: `https://localhost:8081/_explorer/index.html`
-2. Use a chave: `C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==`
-3. Navegue: `feedback-db` → `feedbacks`
-4. Você deve ver os feedbacks criados
+Os dados são salvos no Azurite (Table Storage). Você pode verificar através dos logs da aplicação ou usando ferramentas como Azure Storage Explorer conectando-se ao Azurite local.
 
 ### Verificar logs da aplicação
 
 No terminal onde a aplicação está rodando, você deve ver:
 - `Feedback processado com sucesso`
-- `Feedback crítico detectado, enviando notificação` (para notas ≤ 3)
-- `Mensagem crítica publicada no Service Bus`
+- `Notificação crítica enviada por email` (para notas ≤ 3)
+- `Email enviado com sucesso para: [admin email]` (se SendGrid estiver configurado)
+- `SendGrid API Key não configurada` (se não estiver configurado - apenas em desenvolvimento)
 
 ### Verificar logs dos containers
 
@@ -192,8 +185,8 @@ Invoke-RestMethod -Uri "http://localhost:7071/api/avaliacao" -Method Post -Body 
 - [ ] 3 containers estão rodando (`docker ps`)
 - [ ] Aplicação iniciou sem erros (terminal mostra "Listening on: http://localhost:7071")
 - [ ] Endpoint `/api/avaliacao` responde
-- [ ] Feedback normal é salvo no Cosmos DB
-- [ ] Feedback crítico (nota ≤ 3) dispara notificação no Service Bus
+- [ ] Feedback normal é salvo no Table Storage
+- [ ] Feedback crítico (nota ≤ 3) dispara notificação via SendGrid
 - [ ] Logs da aplicação mostram as operações
 
 ---
@@ -221,7 +214,7 @@ docker-compose down -v
 - Aguarde 30-60 segundos após iniciar o Docker Desktop
 - Verifique: `docker info`
 
-### Aplicação não conecta ao Cosmos DB
+### Aplicação não conecta ao Table Storage
 - Aguarde 30 segundos após `docker-compose up -d`
 - Verifique se o container está rodando: `docker ps`
 
@@ -229,7 +222,8 @@ docker-compose down -v
 ```powershell
 # Verificar processos
 netstat -ano | findstr :7071
-netstat -ano | findstr :8081
+netstat -ano | findstr :10000
+netstat -ano | findstr :10002
 
 # Parar containers
 docker-compose down

@@ -10,35 +10,11 @@ Write-Host "Verificando containers Docker..." -ForegroundColor Yellow
 try {
     $containerNames = docker ps --format "{{.Names}}" 2>$null
     $azurite = $containerNames | Where-Object { $_ -match 'azurite' }
-    $servicebus = $containerNames | Where-Object { $_ -match 'servicebus' }
-    $sqlserver = $containerNames | Where-Object { $_ -match 'sqlserver' }
-    
-    $todosRodando = $true
     
     if (-not $azurite) {
         Write-Host "   [X] Azurite nao esta rodando (Table Storage, Blob Storage)" -ForegroundColor Red
-        $todosRodando = $false
-    } else {
-        Write-Host "   [OK] Azurite: rodando (Table Storage, Blob Storage)" -ForegroundColor Green
-    }
-    
-    if (-not $sqlserver) {
-        Write-Host "   [X] SQL Server nao esta rodando" -ForegroundColor Red
-        $todosRodando = $false
-    } else {
-        Write-Host "   [OK] SQL Server: rodando" -ForegroundColor Green
-    }
-    
-    if (-not $servicebus) {
-        Write-Host "   [X] Service Bus nao esta rodando" -ForegroundColor Red
-        $todosRodando = $false
-    } else {
-        Write-Host "   [OK] Service Bus: rodando" -ForegroundColor Green
-    }
-    
-    if (-not $todosRodando) {
         Write-Host ""
-        Write-Host "ATENCAO: Nem todos os containers estao rodando!" -ForegroundColor Yellow
+        Write-Host "ATENCAO: Container Docker nao esta rodando!" -ForegroundColor Yellow
         Write-Host "   Execute: docker compose up -d" -ForegroundColor White
         Write-Host ""
         Write-Host "Deseja continuar mesmo assim? (S/N)" -ForegroundColor Yellow
@@ -49,8 +25,9 @@ try {
         }
         Write-Host ""
     } else {
+        Write-Host "   [OK] Azurite: rodando (Table Storage, Blob Storage)" -ForegroundColor Green
         Write-Host ""
-        Write-Host "OK: Todos os containers Docker estao rodando" -ForegroundColor Green
+        Write-Host "OK: Container Docker esta rodando" -ForegroundColor Green
         Write-Host ""
     }
 } catch {

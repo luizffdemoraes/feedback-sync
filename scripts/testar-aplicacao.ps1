@@ -3,7 +3,7 @@
 # ============================================
 # Este script testa:
 # - Endpoint REST (FeedbackController)
-# - Azure Functions (NotifyAdminFunction, WeeklyReportFunction)
+# - Azure Functions (WeeklyReportFunction)
 # e gera um relatório de validação completo
 # ============================================
 
@@ -50,14 +50,13 @@ function Test-Prerequisites {
             Write-Error "  [X] Docker nao esta rodando ou nao ha containers"
             $allOk = $false
         } else {
-            # Containers necessários: Azurite (Table Storage + Blob), SQL Server, Service Bus
-            $required = @("azurite", "servicebus", "sqlserver")
+            # Containers necessários: Azurite (Table Storage + Blob)
+            $required = @("azurite")
             foreach ($req in $required) {
                 $found = $containers | Where-Object { $_ -match $req }
                 if ($found) {
                     $displayName = switch ($req) {
                         "azurite" { "Azurite (Table Storage + Blob)" }
-                        "servicebus" { "Service Bus" }
                         "sqlserver" { "SQL Server" }
                         default { $req }
                     }
@@ -417,7 +416,7 @@ function Test-FeedbackController {
     # Teste 2: Feedback crítico (nota <= 3) - deve funcionar e disparar notificação
     Invoke-FunctionTest `
         -TestName "SubmitFeedback - Feedback Critico" `
-        -Description "Envia feedback com nota 2 (critico - deve disparar NotifyAdminFunction)" `
+        -Description "Envia feedback com nota 2 (critico - deve disparar notificacao por email)" `
         -Uri $endpointSubmit `
         -Body @{
             descricao = "Aula muito ruim, nao entendi nada"
@@ -551,14 +550,14 @@ function Test-FeedbackController {
 
 function Test-NotifyAdminFunction {
     Write-Info "`n========================================"
-    Write-Info "TESTANDO: NotifyAdminFunction"
+    Write-Info "TESTANDO: Notificacao de Feedback Critico (SendGrid)"
     Write-Info "========================================"
     
-    Write-Info "`nA NotifyAdminFunction e disparada automaticamente quando um feedback critico (nota <= 3) e criado."
+    Write-Info "`nQuando um feedback critico (nota <= 3) e criado, o sistema envia email automaticamente via SendGrid."
     Write-Info "Para validar, verifique os logs da aplicacao apos enviar um feedback critico."
     
-    # Criar feedback crítico para disparar a função
-    Write-Info "`nEnviando feedback critico para disparar NotifyAdminFunction..."
+    # Criar feedback crítico para disparar notificação
+    Write-Info "`nEnviando feedback critico para disparar notificacao por email..."
     
     try {
         $criticalBody = @{
@@ -576,15 +575,15 @@ function Test-NotifyAdminFunction {
         
         Write-Success "  [OK] Feedback critico criado (ID: $($response.id))"
         Write-Info "`nAgora verifique os logs da aplicacao para confirmar:"
-        Write-Info "  - 'Processando mensagem critica do Service Bus'"
-        Write-Info "  - 'Feedback critico recebido'"
-        Write-Info "  - 'Notificacao enviada ao administrador com sucesso'"
+        Write-Info "  - 'Notificacao critica enviada por email'"
+        Write-Info "  - 'Email enviado com sucesso para: [admin email]'"
+        Write-Info "`nNOTA: Se SendGrid nao estiver configurado, o sistema apenas logara um aviso."
         
         $script:testResults += @{
-            Name = "NotifyAdminFunction - Disparo Automatico"
+            Name = "Notificacao de Feedback Critico - SendGrid"
             Description = "Verificar logs apos feedback critico"
             Status = "INFO"
-            Message = "Feedback critico criado. Verifique logs manualmente."
+            Message = "Feedback critico criado. Verifique logs para confirmar envio de email via SendGrid."
             Duration = 0
             Response = $response
         }
@@ -592,7 +591,7 @@ function Test-NotifyAdminFunction {
     } catch {
         Write-Error "  [X] Erro ao criar feedback critico: $_"
         $script:testResults += @{
-            Name = "NotifyAdminFunction - Disparo Automatico"
+            Name = "Notificacao de Feedback Critico - SendGrid"
             Description = "Verificar logs apos feedback critico"
             Status = "ERROR"
             Message = "Erro ao criar feedback critico: $_"
@@ -743,7 +742,7 @@ if (-not $SkipPreChecks) {
 
 Write-Info "`nIniciando testes do projeto...`n"
 Write-Info "  - FeedbackController (REST)"
-Write-Info "  - NotifyAdminFunction (Azure Function)"
+Write-Info "  - Notificacao de Feedback Critico (SendGrid)"
 Write-Info "  - WeeklyReportFunction (Azure Function)`n"
 
 try {

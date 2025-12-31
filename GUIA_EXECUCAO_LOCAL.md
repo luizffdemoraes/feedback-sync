@@ -34,9 +34,6 @@ $env:QUARKUS_PROFILE = "local"
 ### Passo 1: Iniciar Serviços Docker
 
 ```powershell
-# Construir imagem customizada do Service Bus (primeira vez)
-docker compose build servicebus
-
 # Iniciar todos os serviços
 docker compose up -d
 
@@ -57,10 +54,7 @@ docker compose logs -f
 ```
 
 **Serviços que devem estar prontos:**
-- ✅ Cosmos DB: `healthy`
-- ✅ Azurite: `healthy`
-- ✅ SQL Server: `healthy`
-- ✅ Service Bus: `healthy` (pode demorar ~2 minutos)
+- ✅ Azurite: `healthy` (Table Storage + Blob Storage)
 
 ### Passo 3: Executar Aplicação Localmente
 
@@ -101,11 +95,8 @@ docker compose ps
 ### Ver logs de um serviço específico:
 
 ```powershell
-# Service Bus
-docker compose logs -f servicebus
-
-# Cosmos DB
-docker compose logs -f cosmosdb
+# Azurite
+docker compose logs -f azurite
 
 # Todos os serviços
 docker compose logs -f
@@ -114,12 +105,6 @@ docker compose logs -f
 ### Verificar saúde dos serviços:
 
 ```powershell
-# Service Bus
-curl http://localhost:8080/health
-
-# Cosmos DB
-curl -k https://localhost:8081/_explorer/emulator.pem
-
 # Azurite
 curl http://localhost:10000/devstoreaccount1
 ```
@@ -147,7 +132,7 @@ docker compose restart
 ### Reiniciar apenas um serviço:
 
 ```powershell
-docker compose restart servicebus
+docker compose restart azurite
 ```
 
 ### Limpar e reiniciar tudo:
@@ -164,17 +149,6 @@ docker compose up -d
 ```
 
 ## 🐛 Troubleshooting
-
-### Service Bus não inicia
-
-```powershell
-# Ver logs
-docker compose logs servicebus
-
-# Reconstruir imagem
-docker compose build --no-cache servicebus
-docker compose up -d servicebus
-```
 
 ### Aplicação não conecta aos serviços
 

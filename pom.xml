@@ -65,11 +65,18 @@
             <version>12.3.11</version>
         </dependency>
 
-        <!-- Azure Service Bus Client -->
+        <!-- Azure Queue Storage -->
         <dependency>
             <groupId>com.azure</groupId>
-            <artifactId>azure-messaging-servicebus</artifactId>
-            <version>7.17.3</version>
+            <artifactId>azure-storage-queue</artifactId>
+            <version>12.25.0</version>
+        </dependency>
+
+        <!-- SendGrid para envio de emails (GRATUITO até 25k emails/dia) -->
+        <dependency>
+            <groupId>com.sendgrid</groupId>
+            <artifactId>sendgrid-java</artifactId>
+            <version>4.10.1</version>
         </dependency>
 
         <!-- Jackson for JSON -->
