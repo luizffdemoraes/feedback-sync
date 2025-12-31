@@ -3,8 +3,6 @@ package br.com.fiap.postech.feedback.infrastructure.handlers;
 import br.com.fiap.postech.feedback.application.usecases.NotifyAdminUseCase;
 import br.com.fiap.postech.feedback.domain.entities.Feedback;
 import br.com.fiap.postech.feedback.domain.exceptions.NotificationException;
-import br.com.fiap.postech.feedback.domain.values.Score;
-import br.com.fiap.postech.feedback.domain.values.Urgency;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.microsoft.azure.functions.ExecutionContext;
 import org.junit.jupiter.api.BeforeEach;

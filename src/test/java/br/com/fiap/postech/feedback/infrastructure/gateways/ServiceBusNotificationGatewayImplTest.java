@@ -13,13 +13,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -65,13 +62,10 @@ class ServiceBusNotificationGatewayImplTest {
         Feedback feedback = new Feedback("Aula ruim", 2, "HIGH");
         String jsonPayload = "{\"id\":\"123\",\"description\":\"Aula ruim\"}";
         
-        when(objectMapper.writeValueAsString(any())).thenReturn(jsonPayload);
+        doReturn(jsonPayload).when(objectMapper).writeValueAsString(any());
         doNothing().when(senderClient).sendMessage(any(ServiceBusMessage.class));
 
         gateway.publishCritical(feedback);
-
-        // Aguardar execução assíncrona
-        Thread.sleep(100);
         
         verify(objectMapper, timeout(500).atLeastOnce()).writeValueAsString(feedback);
     }
@@ -142,12 +136,10 @@ class ServiceBusNotificationGatewayImplTest {
         Feedback feedback = new Feedback("Aula ruim", 2, "HIGH");
         String jsonPayload = "{\"id\":\"123\"}";
         
-        when(objectMapper.writeValueAsString(any())).thenReturn(jsonPayload);
+        doReturn(jsonPayload).when(objectMapper).writeValueAsString(any());
         doNothing().when(senderClient).sendMessage(any(ServiceBusMessage.class));
 
         gateway.publishCritical(feedback);
-
-        Thread.sleep(100);
         
         verify(senderClient, timeout(500).atLeastOnce()).sendMessage(argThat(message -> 
             "critical-feedback".equals(message.getSubject()) &&
@@ -173,7 +165,7 @@ class ServiceBusNotificationGatewayImplTest {
 
     @Test
     @DisplayName("Deve fazer cleanup do executor service")
-    void deveFazerCleanupDoExecutorService() throws Exception {
+    void deveFazerCleanupDoExecutorService() {
         gateway.cleanup();
         
         // Verificar se o executor foi encerrado
@@ -187,18 +179,17 @@ class ServiceBusNotificationGatewayImplTest {
         com.fasterxml.jackson.core.JsonProcessingException erro = 
             new com.fasterxml.jackson.core.JsonProcessingException("Erro ao serializar") {};
         
-        when(objectMapper.writeValueAsString(any())).thenThrow(erro);
+        doThrow(erro).when(objectMapper).writeValueAsString(any());
 
         // Não deve lançar exceção, apenas logar erro
         assertDoesNotThrow(() -> gateway.publishCritical(feedback));
         
-        Thread.sleep(100);
         verify(objectMapper, timeout(500).atLeastOnce()).writeValueAsString(feedback);
     }
 
     @Test
     @DisplayName("Deve fazer cleanup mesmo quando ocorre erro ao fechar senderClient")
-    void deveFazerCleanupMesmoQuandoOcorreErroAoFecharSenderClient() throws Exception {
+    void deveFazerCleanupMesmoQuandoOcorreErroAoFecharSenderClient() {
         doThrow(new RuntimeException("Erro ao fechar")).when(senderClient).close();
 
         // Não deve lançar exceção
@@ -222,21 +213,15 @@ class ServiceBusNotificationGatewayImplTest {
     void deveTratarTimeoutAoEnviarMensagemComTimeout() throws Exception {
         Feedback feedback = new Feedback("Aula ruim", 2, "HIGH");
         String jsonPayload = "{\"id\":\"123\"}";
-        ServiceBusMessage message = new ServiceBusMessage(jsonPayload);
         
-        when(objectMapper.writeValueAsString(any())).thenReturn(jsonPayload);
+        doReturn(jsonPayload).when(objectMapper).writeValueAsString(any());
         
-        // Criar um CompletableFuture que nunca completa para simular timeout
-        CompletableFuture<Void> neverCompletingFuture = new CompletableFuture<>();
         doAnswer(invocation -> {
             // Simular timeout não lançando exceção imediatamente
             return null;
         }).when(senderClient).sendMessage(any(ServiceBusMessage.class));
 
         gateway.publishCritical(feedback);
-        
-        // Aguardar um pouco para que o método assíncrono seja executado
-        Thread.sleep(200);
         
         verify(objectMapper, timeout(500).atLeastOnce()).writeValueAsString(feedback);
     }
@@ -247,12 +232,10 @@ class ServiceBusNotificationGatewayImplTest {
         Feedback feedback = new Feedback("Aula ruim", 2, "HIGH");
         String jsonPayload = "{\"id\":\"123\"}";
         
-        when(objectMapper.writeValueAsString(any())).thenReturn(jsonPayload);
+        doReturn(jsonPayload).when(objectMapper).writeValueAsString(any());
         doThrow(new RuntimeException("Erro de conexão")).when(senderClient).sendMessage(any(ServiceBusMessage.class));
 
         gateway.publishCritical(feedback);
-        
-        Thread.sleep(200);
         
         verify(objectMapper, timeout(500).atLeastOnce()).writeValueAsString(feedback);
         verify(senderClient, timeout(500).atLeastOnce()).sendMessage(any(ServiceBusMessage.class));
