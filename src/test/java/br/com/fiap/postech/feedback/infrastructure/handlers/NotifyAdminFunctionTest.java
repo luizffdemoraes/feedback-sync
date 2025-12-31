@@ -59,42 +59,6 @@ class NotifyAdminFunctionTest {
     }
 
     @Test
-    @DisplayName("Deve tratar mensagem simples quando não for Feedback JSON")
-    void deveTratarMensagemSimplesQuandoNaoForFeedbackJson() throws Exception {
-        String mensagemSimples = "Mensagem simples de texto";
-        com.fasterxml.jackson.databind.exc.MismatchedInputException mismatchException = 
-            mock(com.fasterxml.jackson.databind.exc.MismatchedInputException.class);
-        
-        when(objectMapper.readValue(anyString(), eq(Feedback.class))).thenThrow(mismatchException);
-        doNothing().when(emailGateway).sendAdminNotification(anyString());
-
-        assertDoesNotThrow(() -> notifyAdminFunction.run(mensagemSimples, executionContext));
-
-        verify(objectMapper, times(1)).readValue(mensagemSimples, Feedback.class);
-        verify(emailGateway, times(1)).sendAdminNotification(mensagemSimples);
-    }
-
-    @Test
-    @DisplayName("Deve lançar RuntimeException quando erro ao enviar notificação simples")
-    void deveLancarRuntimeExceptionQuandoErroAoEnviarNotificacaoSimples() throws Exception {
-        String mensagemSimples = "Mensagem simples";
-        com.fasterxml.jackson.databind.exc.MismatchedInputException mismatchException = 
-            mock(com.fasterxml.jackson.databind.exc.MismatchedInputException.class);
-        NotificationException notificationException = new NotificationException("Erro ao enviar email");
-        
-        when(objectMapper.readValue(anyString(), eq(Feedback.class))).thenThrow(mismatchException);
-        doThrow(notificationException).when(emailGateway).sendAdminNotification(anyString());
-
-        RuntimeException exception = assertThrows(
-            RuntimeException.class,
-            () -> notifyAdminFunction.run(mensagemSimples, executionContext)
-        );
-
-        assertEquals("Falha ao enviar notificação", exception.getMessage());
-        assertEquals(notificationException, exception.getCause());
-    }
-
-    @Test
     @DisplayName("Deve lançar RuntimeException quando erro ao processar feedback")
     void deveLancarRuntimeExceptionQuandoErroAoProcessarFeedback() throws Exception {
         RuntimeException runtimeException = new RuntimeException("Erro ao deserializar");

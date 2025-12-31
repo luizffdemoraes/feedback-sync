@@ -1,7 +1,6 @@
 package br.com.fiap.postech.feedback.infrastructure.handlers;
 
 import br.com.fiap.postech.feedback.domain.entities.Feedback;
-import br.com.fiap.postech.feedback.domain.exceptions.NotificationException;
 import br.com.fiap.postech.feedback.domain.gateways.EmailNotificationGateway;
 import br.com.fiap.postech.feedback.infrastructure.config.FunctionProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -60,25 +59,8 @@ public class NotifyAdminFunction {
 
             emailGateway.sendAdminNotification(buildEmailContent(feedback));
             logger.info("Notificação enviada com sucesso - ID: {}", feedback.getId());
-
-        } catch (com.fasterxml.jackson.databind.exc.MismatchedInputException e) {
-            // Se não for um Feedback JSON, tratar como mensagem simples
-            logger.warn("Mensagem não é um Feedback JSON válido, enviando como texto simples");
-            try {
-                emailGateway.sendAdminNotification(message);
-                logger.info("Notificação simples enviada com sucesso");
-            } catch (NotificationException ex) {
-                logger.error("Erro ao enviar notificação simples", ex);
-                throw new FunctionProcessingException("Falha ao enviar notificação", ex);
-            }
-        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
-            logger.error("Erro ao deserializar mensagem JSON", e);
-            throw new FunctionProcessingException("Falha ao processar notificação crítica", e);
-        } catch (NotificationException e) {
-            logger.error("Erro ao enviar notificação", e);
-            throw new FunctionProcessingException("Falha ao processar notificação crítica", e);
         } catch (Exception e) {
-            logger.error("Erro inesperado ao processar notificação", e);
+            logger.error("Erro ao processar notificação", e);
             throw new FunctionProcessingException("Falha ao processar notificação crítica", e);
         }
     }
