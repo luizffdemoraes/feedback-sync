@@ -1,0 +1,449 @@
+{
+	"info": {
+		"_postman_id": "feedback-sync-collection",
+		"name": "Feedback Sync - Tech Challenge 4ª Fase",
+		"description": "Collection completa para testar a API do sistema de feedback serverless.\n\n**Endpoints disponíveis:**\n- POST /avaliacao - Criar feedback de avaliação\n- POST /relatorio - Gerar relatório semanal\n- GET /health - Health check da aplicação\n\n**Ambientes:**\n- Local: http://localhost:7071\n- Azure: {{azure_url}}",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Health Check",
+			"item": [
+				{
+					"name": "Health Check - Verificar Status",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response time is less than 2000ms\", function () {",
+									"    pm.expect(pm.response.responseTime).to.be.below(2000);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/health",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"health"
+							]
+						},
+						"description": "Verifica o status de saúde da aplicação. Retorna informações sobre o estado do sistema."
+					},
+					"response": []
+				}
+			],
+			"description": "Endpoints para verificação de saúde da aplicação"
+		},
+		{
+			"name": "Feedback",
+			"item": [
+				{
+					"name": "Criar Feedback - Crítico (Nota Baixa)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 201\", function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"",
+									"pm.test(\"Response has id and status\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('id');",
+									"    pm.expect(jsonData).to.have.property('status');",
+									"    pm.expect(jsonData.status).to.eql('recebido');",
+									"});",
+									"",
+									"pm.test(\"Response time is less than 3000ms\", function () {",
+									"    pm.expect(pm.response.responseTime).to.be.below(3000);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"descricao\": \"Aula muito confusa, não consegui entender o conteúdo. Preciso de ajuda urgente!\",\n    \"nota\": 2,\n    \"urgencia\": \"HIGH\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/avaliacao",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"avaliacao"
+							]
+						},
+						"description": "Cria um feedback crítico (nota ≤ 3). Este feedback será automaticamente enviado para o Service Bus e processado pela função NotifyAdminFunction para notificar os administradores."
+					},
+					"response": []
+				},
+				{
+					"name": "Criar Feedback - Normal (Nota Média)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 201\", function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"",
+									"pm.test(\"Response has id and status\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('id');",
+									"    pm.expect(jsonData).to.have.property('status');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"descricao\": \"Aula boa, conteúdo interessante mas poderia ter mais exemplos práticos.\",\n    \"nota\": 7,\n    \"urgencia\": \"MEDIUM\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/avaliacao",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"avaliacao"
+							]
+						},
+						"description": "Cria um feedback com nota média. Este feedback será apenas persistido no Table Storage, sem disparar notificação crítica."
+					},
+					"response": []
+				},
+				{
+					"name": "Criar Feedback - Excelente (Nota Alta)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 201\", function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"",
+									"pm.test(\"Response has id and status\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('id');",
+									"    pm.expect(jsonData).to.have.property('status');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"descricao\": \"Aula excelente! Professor muito didático, conteúdo bem explicado e exemplos práticos muito úteis.\",\n    \"nota\": 10,\n    \"urgencia\": \"LOW\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/avaliacao",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"avaliacao"
+							]
+						},
+						"description": "Cria um feedback com nota alta. Demonstra avaliação positiva da aula."
+					},
+					"response": []
+				},
+				{
+					"name": "Criar Feedback - Sem Urgência (Padrão LOW)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 201\", function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"",
+									"pm.test(\"Response has id and status\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('id');",
+									"    pm.expect(jsonData).to.have.property('status');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"descricao\": \"Aula razoável, conteúdo básico mas útil.\",\n    \"nota\": 6\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/avaliacao",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"avaliacao"
+							]
+						},
+						"description": "Cria um feedback sem especificar urgência. O sistema assume LOW como padrão."
+					},
+					"response": []
+				},
+				{
+					"name": "Criar Feedback - Erro de Validação (Sem Descrição)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 400\", function () {",
+									"    pm.response.to.have.status(400);",
+									"});",
+									"",
+									"pm.test(\"Response has error message\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('error');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"nota\": 8\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/avaliacao",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"avaliacao"
+							]
+						},
+						"description": "Testa validação de campos obrigatórios. Deve retornar erro 400 pois a descrição é obrigatória."
+					},
+					"response": []
+				},
+				{
+					"name": "Criar Feedback - Erro de Validação (Sem Nota)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 400\", function () {",
+									"    pm.response.to.have.status(400);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"descricao\": \"Aula interessante\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/avaliacao",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"avaliacao"
+							]
+						},
+						"description": "Testa validação de campos obrigatórios. Deve retornar erro 400 pois a nota é obrigatória."
+					},
+					"response": []
+				},
+				{
+					"name": "Criar Feedback - Erro de Validação (Nota Inválida)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 400\", function () {",
+									"    pm.response.to.have.status(400);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"descricao\": \"Teste de nota inválida\",\n    \"nota\": 15\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/avaliacao",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"avaliacao"
+							]
+						},
+						"description": "Testa validação de nota. Deve retornar erro 400 pois a nota deve estar entre 0 e 10."
+					},
+					"response": []
+				}
+			],
+			"description": "Endpoints para criação e gerenciamento de feedbacks de avaliação"
+		},
+		{
+			"name": "Relatórios",
+			"item": [
+				{
+					"name": "Gerar Relatório Semanal",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response has report data\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('periodo_inicio');",
+									"    pm.expect(jsonData).to.have.property('periodo_fim');",
+									"    pm.expect(jsonData).to.have.property('total_avaliacoes');",
+									"    pm.expect(jsonData).to.have.property('media_avaliacoes');",
+									"    pm.expect(jsonData).to.have.property('avaliacoes_por_dia');",
+									"    pm.expect(jsonData).to.have.property('avaliacoes_por_urgencia');",
+									"    pm.expect(jsonData).to.have.property('report_url');",
+									"});",
+									"",
+									"pm.test(\"Total de avaliações is a number\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.total_avaliacoes).to.be.a('number');",
+									"});",
+									"",
+									"pm.test(\"Média de avaliações is a number\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.media_avaliacoes).to.be.a('number');",
+									"});",
+									"",
+									"pm.test(\"Response time is less than 10000ms\", function () {",
+									"    pm.expect(pm.response.responseTime).to.be.below(10000);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": ""
+						},
+						"url": {
+							"raw": "{{base_url}}/relatorio",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"relatorio"
+							]
+						},
+						"description": "Gera um relatório semanal consolidado de todos os feedbacks da semana atual (segunda-feira até hoje).\n\nO relatório inclui:\n- Período (início e fim)\n- Total de avaliações\n- Média de avaliações\n- Quantidade de avaliações por dia\n- Quantidade de avaliações por urgência\n- URL do arquivo JSON salvo no Blob Storage\n\n**Nota:** Este endpoint força a geração manual do relatório. O relatório também é gerado automaticamente toda segunda-feira às 08:00 via Timer Trigger (WeeklyReportFunction)."
+					},
+					"response": []
+				}
+			],
+			"description": "Endpoints para geração e consulta de relatórios semanais"
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:7071",
+			"type": "string"
+		}
+	]
+}
