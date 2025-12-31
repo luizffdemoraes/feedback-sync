@@ -16,16 +16,16 @@ import org.slf4j.LoggerFactory;
  * Azure Function que processa notificações críticas de feedbacks.
  * 
  * Tipo: Queue Trigger
- * Responsabilidade única: Processar mensagens da fila e enviar emails via SendGrid
+ * Responsabilidade única: Processar mensagens da fila e enviar emails via Mailtrap
  * 
  * Fluxo:
  * 1. CreateFeedbackUseCase publica feedback crítico na fila Azure Queue Storage
  * 2. Azure Queue Storage dispara esta função automaticamente
- * 3. Função deserializa o feedback e envia email via SendGrid
+ * 3. Função deserializa o feedback e envia email via Mailtrap
  * 
  * Integração com Recursos Azure:
  * - Azure Queue Storage (trigger)
- * - SendGrid (envio de emails)
+ * - Mailtrap (envio de emails)
  */
 @ApplicationScoped
 public class NotifyAdminFunction {

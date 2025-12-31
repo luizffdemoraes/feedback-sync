@@ -7,7 +7,7 @@
 # - Function App
 # 
 # NOTA: Service Bus foi removido para reduzir custos.
-# Emails são enviados diretamente via SendGrid (gratuito até 25k/dia).
+# Emails são enviados diretamente via Mailtrap.
 # ============================================
 
 param(
@@ -102,7 +102,7 @@ az storage container create `
 
 Write-Host "   ✅ Container criado" -ForegroundColor Green
 
-# 3. Criar Function App (Service Bus removido - usando SendGrid para emails)
+# 3. Criar Function App (Service Bus removido - usando Mailtrap para emails)
 $functionAppName = "feedback-function-$Suffix"
 # Function App name deve ter entre 2-60 caracteres
 if ($functionAppName.Length -gt 60) {
@@ -131,9 +131,8 @@ Write-Host "   ✅ Function App criada" -ForegroundColor Green
 # Configurar Application Settings
 Write-Host "`n⚙️ Configurando Application Settings..." -ForegroundColor Yellow
 Write-Host "   ⚠️  IMPORTANTE: Configure manualmente as seguintes variáveis:" -ForegroundColor Yellow
-Write-Host "      - SENDGRID_API_KEY: Sua API Key do SendGrid (gratuito até 25k emails/dia)" -ForegroundColor Gray
+Write-Host "      - MAILTRAP_API_TOKEN: Token da API do Mailtrap" -ForegroundColor Gray
 Write-Host "      - ADMIN_EMAIL: Email do administrador para receber notificações" -ForegroundColor Gray
-Write-Host "      - SENDGRID_FROM_EMAIL: Email remetente (opcional)" -ForegroundColor Gray
 Write-Host ""
 
 az functionapp config appsettings set `
@@ -153,11 +152,11 @@ az functionapp config appsettings set `
 
 Write-Host "   ✅ Application Settings configuradas" -ForegroundColor Green
 Write-Host ""
-Write-Host "   📧 Para configurar SendGrid:" -ForegroundColor Cyan
-Write-Host "      1. Crie conta gratuita em: https://sendgrid.com" -ForegroundColor White
-Write-Host "      2. Gere uma API Key" -ForegroundColor White
+Write-Host "   📧 Para configurar Mailtrap:" -ForegroundColor Cyan
+Write-Host "      1. Crie conta gratuita em: https://mailtrap.io" -ForegroundColor White
+Write-Host "      2. Gere um API Token" -ForegroundColor White
 Write-Host "      3. Execute:" -ForegroundColor White
-Write-Host "         az functionapp config appsettings set --name $functionAppName --resource-group $ResourceGroupName --settings SENDGRID_API_KEY='sua-api-key' ADMIN_EMAIL='seu-email@exemplo.com'" -ForegroundColor Gray
+Write-Host "         az functionapp config appsettings set --name $functionAppName --resource-group $ResourceGroupName --settings MAILTRAP_API_TOKEN='seu-token' ADMIN_EMAIL='seu-email@exemplo.com'" -ForegroundColor Gray
 
 # Resumo
 Write-Host ""
@@ -176,7 +175,7 @@ Write-Host "  Nome: $storageAccountName" -ForegroundColor Gray
 Write-Host "  Container: weekly-reports" -ForegroundColor Gray
 Write-Host ""
 Write-Host "Notificações:" -ForegroundColor White
-Write-Host "  Método: SendGrid (gratuito até 25k emails/dia)" -ForegroundColor Gray
+Write-Host "  Método: Mailtrap" -ForegroundColor Gray
 Write-Host "  Service Bus: REMOVIDO para reduzir custos" -ForegroundColor Gray
 Write-Host ""
 Write-Host "Function App:" -ForegroundColor White

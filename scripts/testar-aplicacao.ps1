@@ -550,10 +550,10 @@ function Test-FeedbackController {
 
 function Test-NotifyAdminFunction {
     Write-Info "`n========================================"
-    Write-Info "TESTANDO: Notificacao de Feedback Critico (SendGrid)"
+    Write-Info "TESTANDO: Notificacao de Feedback Critico (Mailtrap)"
     Write-Info "========================================"
     
-    Write-Info "`nQuando um feedback critico (nota <= 3) e criado, o sistema envia email automaticamente via SendGrid."
+    Write-Info "`nQuando um feedback critico (nota <= 3) e criado, o sistema envia email automaticamente via Mailtrap."
     Write-Info "Para validar, verifique os logs da aplicacao apos enviar um feedback critico."
     
     # Criar feedback crítico para disparar notificação
@@ -577,13 +577,13 @@ function Test-NotifyAdminFunction {
         Write-Info "`nAgora verifique os logs da aplicacao para confirmar:"
         Write-Info "  - 'Notificacao critica enviada por email'"
         Write-Info "  - 'Email enviado com sucesso para: [admin email]'"
-        Write-Info "`nNOTA: Se SendGrid nao estiver configurado, o sistema apenas logara um aviso."
+        Write-Info "`nNOTA: Se Mailtrap nao estiver configurado, o sistema apenas logara um aviso."
         
         $script:testResults += @{
-            Name = "Notificacao de Feedback Critico - SendGrid"
+            Name = "Notificacao de Feedback Critico - Mailtrap"
             Description = "Verificar logs apos feedback critico"
             Status = "INFO"
-            Message = "Feedback critico criado. Verifique logs para confirmar envio de email via SendGrid."
+            Message = "Feedback critico criado. Verifique logs para confirmar envio de email via Mailtrap."
             Duration = 0
             Response = $response
         }
@@ -591,7 +591,7 @@ function Test-NotifyAdminFunction {
     } catch {
         Write-Error "  [X] Erro ao criar feedback critico: $_"
         $script:testResults += @{
-            Name = "Notificacao de Feedback Critico - SendGrid"
+            Name = "Notificacao de Feedback Critico - Mailtrap"
             Description = "Verificar logs apos feedback critico"
             Status = "ERROR"
             Message = "Erro ao criar feedback critico: $_"
@@ -742,7 +742,7 @@ if (-not $SkipPreChecks) {
 
 Write-Info "`nIniciando testes do projeto...`n"
 Write-Info "  - FeedbackController (REST)"
-Write-Info "  - Notificacao de Feedback Critico (SendGrid)"
+Write-Info "  - Notificacao de Feedback Critico (Mailtrap)"
 Write-Info "  - WeeklyReportFunction (Azure Function)`n"
 
 try {

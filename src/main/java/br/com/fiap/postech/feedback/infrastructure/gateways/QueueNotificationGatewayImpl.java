@@ -19,13 +19,13 @@ import org.slf4j.LoggerFactory;
  * Implementação do QueueNotificationGateway usando Azure Queue Storage.
  * 
  * Responsabilidade: Publicar notificações críticas na fila Azure Queue Storage.
- * A Azure Function NotifyAdminFunction processa as mensagens da fila e envia emails via SendGrid.
+ * A Azure Function NotifyAdminFunction processa as mensagens da fila e envia emails via Mailtrap.
  * 
  * Fluxo:
  * 1. CreateFeedbackUseCase → publishCritical(feedback) → QueueNotificationGatewayImpl
  * 2. QueueNotificationGatewayImpl → Azure Queue Storage (fila: critical-feedbacks)
  * 3. Azure Queue Storage → Trigger → NotifyAdminFunction
- * 4. NotifyAdminFunction → SendGrid → Email ao admin
+ * 4. NotifyAdminFunction → Mailtrap → Email ao admin
  */
 @ApplicationScoped
 public class QueueNotificationGatewayImpl implements QueueNotificationGateway {

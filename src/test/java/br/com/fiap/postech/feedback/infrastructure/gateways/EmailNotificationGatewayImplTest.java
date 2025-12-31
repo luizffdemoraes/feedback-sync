@@ -1,7 +1,8 @@
 package br.com.fiap.postech.feedback.infrastructure.gateways;
 
 import br.com.fiap.postech.feedback.domain.exceptions.NotificationException;
-import com.sendgrid.SendGrid;
+import io.mailtrap.client.MailtrapClient;
+import io.mailtrap.model.request.emails.MailtrapMail;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -22,130 +23,148 @@ import static org.mockito.Mockito.*;
 class EmailNotificationGatewayImplTest {
 
     @Mock
-    private SendGrid sendGrid;
+    private MailtrapClient mailtrapClient;
 
     @InjectMocks
     private EmailNotificationGatewayImpl gateway;
 
-    private String apiKey;
+    private String mailtrapApiToken;
     private String adminEmail;
-    private String fromEmail;
-    private com.sendgrid.Response successResponse;
-    private com.sendgrid.Response errorResponse;
 
     @BeforeEach
     void setUp() throws Exception {
-        apiKey = "SG.test-api-key";
+        mailtrapApiToken = "test-api-token";
         adminEmail = "admin@test.com";
-        fromEmail = "noreply@test.com";
 
         // Injetar valores via reflection
-        Field apiKeyField = EmailNotificationGatewayImpl.class.getDeclaredField("apiKey");
-        apiKeyField.setAccessible(true);
-        apiKeyField.set(gateway, apiKey);
+        Field apiTokenField = EmailNotificationGatewayImpl.class.getDeclaredField("mailtrapApiToken");
+        apiTokenField.setAccessible(true);
+        apiTokenField.set(gateway, mailtrapApiToken);
 
         Field adminEmailField = EmailNotificationGatewayImpl.class.getDeclaredField("adminEmail");
         adminEmailField.setAccessible(true);
         adminEmailField.set(gateway, adminEmail);
 
-        Field fromEmailField = EmailNotificationGatewayImpl.class.getDeclaredField("fromEmail");
-        fromEmailField.setAccessible(true);
-        fromEmailField.set(gateway, fromEmail);
-
-        Field sendGridField = EmailNotificationGatewayImpl.class.getDeclaredField("sendGrid");
-        sendGridField.setAccessible(true);
-        sendGridField.set(gateway, sendGrid);
+        Field mailtrapClientField = EmailNotificationGatewayImpl.class.getDeclaredField("mailtrapClient");
+        mailtrapClientField.setAccessible(true);
+        mailtrapClientField.set(gateway, mailtrapClient);
     }
 
     @Test
     @DisplayName("Deve enviar notificação com sucesso")
-    void deveEnviarNotificacaoComSucesso() throws Exception {
+    void deveEnviarNotificacaoComSucesso() {
         String message = "Mensagem de teste";
         
-        successResponse = mock(com.sendgrid.Response.class);
-        when(successResponse.getStatusCode()).thenReturn(202);
-        when(sendGrid.api(any(com.sendgrid.Request.class))).thenReturn(successResponse);
+        // O método send() retorna um objeto, não é void
+        when(mailtrapClient.send(any(MailtrapMail.class))).thenReturn(null);
 
         assertDoesNotThrow(() -> gateway.sendAdminNotification(message));
 
-        ArgumentCaptor<com.sendgrid.Request> requestCaptor = ArgumentCaptor.forClass(com.sendgrid.Request.class);
-        verify(sendGrid, times(1)).api(requestCaptor.capture());
+        ArgumentCaptor<MailtrapMail> mailCaptor = ArgumentCaptor.forClass(MailtrapMail.class);
+        verify(mailtrapClient, times(1)).send(mailCaptor.capture());
         
-        com.sendgrid.Request request = requestCaptor.getValue();
-        assertNotNull(request);
-        assertEquals("POST", request.getMethod().toString());
-        assertEquals("mail/send", request.getEndpoint());
+        MailtrapMail mail = mailCaptor.getValue();
+        assertNotNull(mail);
+        assertEquals("ALERTA: Feedback Crítico Recebido", mail.getSubject());
+        assertEquals(message, mail.getText());
+        // Validar email remetente fixo
+        assertNotNull(mail.getFrom());
+        assertEquals("noreply@feedback-sync.com", mail.getFrom().getEmail());
+        assertEquals("Feedback Sync", mail.getFrom().getName());
+        // Validar destinatário
+        assertNotNull(mail.getTo());
+        assertEquals(1, mail.getTo().size());
+        assertEquals(adminEmail, mail.getTo().get(0).getEmail());
     }
 
     @Test
-    @DisplayName("Deve lançar NotificationException quando status code indica erro")
-    void deveLancarNotificationExceptionQuandoStatusCodeIndicaErro() throws Exception {
+    @DisplayName("Deve lançar NotificationException quando Mailtrap lança exceção")
+    void deveLancarNotificationExceptionQuandoMailtrapLancaExcecao() {
         String message = "Mensagem de teste";
+        RuntimeException mailtrapException = new RuntimeException("Erro do Mailtrap");
         
-        errorResponse = mock(com.sendgrid.Response.class);
-        when(errorResponse.getStatusCode()).thenReturn(400);
-        when(sendGrid.api(any(com.sendgrid.Request.class))).thenReturn(errorResponse);
+        doThrow(mailtrapException).when(mailtrapClient).send(any(MailtrapMail.class));
 
         NotificationException exception = assertThrows(
             NotificationException.class,
             () -> gateway.sendAdminNotification(message)
         );
 
-        assertTrue(exception.getMessage().contains("Falha ao enviar email"));
-        assertTrue(exception.getMessage().contains("Status: 400"));
+        assertTrue(exception.getMessage().contains("Falha ao enviar email via Mailtrap"));
+        assertEquals(mailtrapException, exception.getCause());
     }
 
     @Test
-    @DisplayName("Deve lançar NotificationException quando SendGrid lança exceção")
-    void deveLancarNotificationExceptionQuandoSendGridLancaExcecao() throws Exception {
-        String message = "Mensagem de teste";
-        RuntimeException sendGridException = new RuntimeException("Erro do SendGrid");
-        
-        when(sendGrid.api(any(com.sendgrid.Request.class))).thenThrow(sendGridException);
-
-        NotificationException exception = assertThrows(
-            NotificationException.class,
-            () -> gateway.sendAdminNotification(message)
-        );
-
-        assertTrue(exception.getMessage().contains("Falha ao enviar email via SendGrid"));
-        assertEquals(sendGridException, exception.getCause());
-    }
-
-    @Test
-    @DisplayName("Deve retornar silenciosamente quando SendGrid não está disponível e API key está vazia")
-    void deveRetornarSilenciosamenteQuandoSendGridNaoDisponivelEApiKeyVazia() throws Exception {
+    @DisplayName("Deve retornar silenciosamente quando Mailtrap não está disponível e API token está vazio")
+    void deveRetornarSilenciosamenteQuandoMailtrapNaoDisponivelEApiTokenVazio() throws Exception {
         String message = "Mensagem de teste";
         
-        // Remover SendGrid
-        Field sendGridField = EmailNotificationGatewayImpl.class.getDeclaredField("sendGrid");
-        sendGridField.setAccessible(true);
-        sendGridField.set(gateway, null);
+        // Remover MailtrapClient
+        Field mailtrapClientField = EmailNotificationGatewayImpl.class.getDeclaredField("mailtrapClient");
+        mailtrapClientField.setAccessible(true);
+        mailtrapClientField.set(gateway, null);
 
-        // API key vazia
-        Field apiKeyField = EmailNotificationGatewayImpl.class.getDeclaredField("apiKey");
-        apiKeyField.setAccessible(true);
-        apiKeyField.set(gateway, "");
+        // API token vazio
+        Field apiTokenField = EmailNotificationGatewayImpl.class.getDeclaredField("mailtrapApiToken");
+        apiTokenField.setAccessible(true);
+        apiTokenField.set(gateway, "");
 
         assertDoesNotThrow(() -> gateway.sendAdminNotification(message));
-        verify(sendGrid, never()).api(any(com.sendgrid.Request.class));
+        verify(mailtrapClient, never()).send(any(MailtrapMail.class));
     }
 
     @Test
-    @DisplayName("Deve lançar NotificationException quando SendGrid não está disponível mas API key está configurada")
-    void deveLancarNotificationExceptionQuandoSendGridNaoDisponivelMasApiKeyConfigurada() throws Exception {
+    @DisplayName("Deve lançar NotificationException quando Mailtrap não está disponível mas API token está configurado")
+    void deveLancarNotificationExceptionQuandoMailtrapNaoDisponivelMasApiTokenConfigurado() throws Exception {
         String message = "Mensagem de teste";
         
-        // Remover SendGrid mas manter API key
-        Field sendGridField = EmailNotificationGatewayImpl.class.getDeclaredField("sendGrid");
-        sendGridField.setAccessible(true);
-        sendGridField.set(gateway, null);
+        // Remover MailtrapClient mas manter API token
+        Field mailtrapClientField = EmailNotificationGatewayImpl.class.getDeclaredField("mailtrapClient");
+        mailtrapClientField.setAccessible(true);
+        mailtrapClientField.set(gateway, null);
 
         NotificationException exception = assertThrows(
             NotificationException.class,
             () -> gateway.sendAdminNotification(message)
         );
 
-        assertEquals("SendGrid não está disponível", exception.getMessage());
+        assertEquals("Mailtrap não está disponível", exception.getMessage());
     }
+
+    @Test
+    @DisplayName("Deve lançar NotificationException quando email do admin não está configurado (vazio)")
+    void deveLancarNotificationExceptionQuandoEmailAdminNaoConfiguradoVazio() throws Exception {
+        String message = "Mensagem de teste";
+        
+        // Remover email do admin (vazio)
+        Field adminEmailField = EmailNotificationGatewayImpl.class.getDeclaredField("adminEmail");
+        adminEmailField.setAccessible(true);
+        adminEmailField.set(gateway, "");
+
+        NotificationException exception = assertThrows(
+            NotificationException.class,
+            () -> gateway.sendAdminNotification(message)
+        );
+
+        assertTrue(exception.getMessage().contains("E-mail do administrador não informado"));
+    }
+
+    @Test
+    @DisplayName("Deve lançar NotificationException quando email do admin não está configurado (null)")
+    void deveLancarNotificationExceptionQuandoEmailAdminNaoConfiguradoNull() throws Exception {
+        String message = "Mensagem de teste";
+        
+        // Remover email do admin (null)
+        Field adminEmailField = EmailNotificationGatewayImpl.class.getDeclaredField("adminEmail");
+        adminEmailField.setAccessible(true);
+        adminEmailField.set(gateway, null);
+
+        NotificationException exception = assertThrows(
+            NotificationException.class,
+            () -> gateway.sendAdminNotification(message)
+        );
+
+        assertTrue(exception.getMessage().contains("E-mail do administrador não informado"));
+    }
+
 }

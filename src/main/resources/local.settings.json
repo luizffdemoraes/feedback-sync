@@ -5,9 +5,8 @@
     "FUNCTIONS_WORKER_RUNTIME": "java",
     "FUNCTIONS_EXTENSION_VERSION": "~4",
 
-    "sendgrid.api.key": "",
-    "admin.email": "admin@example.com",
-    "sendgrid.from.email": "noreply@feedback-sync.com",
+    "mailtrap.api-token": "",
+    "admin.email": "",
 
     "azure.storage.connection-string": "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;TableEndpoint=http://localhost:10002/devstoreaccount1;BlobEndpoint=http://localhost:10000/devstoreaccount1;QueueEndpoint=http://localhost:10001/devstoreaccount1;",
     "azure.storage.container-name": "weekly-reports",

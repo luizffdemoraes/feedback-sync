@@ -72,11 +72,11 @@
             <version>12.25.0</version>
         </dependency>
 
-        <!-- SendGrid para envio de emails (GRATUITO até 25k emails/dia) -->
+        <!-- Mailtrap para envio de emails -->
         <dependency>
-            <groupId>com.sendgrid</groupId>
-            <artifactId>sendgrid-java</artifactId>
-            <version>4.10.1</version>
+            <groupId>io.mailtrap</groupId>
+            <artifactId>mailtrap-java</artifactId>
+            <version>1.0.0</version>
         </dependency>
 
         <!-- Jackson for JSON -->
