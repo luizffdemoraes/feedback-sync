@@ -42,7 +42,14 @@ class QueueNotificationGatewayImplTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        connectionString = "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;QueueEndpoint=http://127.0.0.1:10001/devstoreaccount1;";
+        // Obtém connection string de variável de ambiente ou usa valor padrão para testes
+        // Para testes locais com Azurite, use: UseDevelopmentStorage=true
+        // Ou configure: AZURE_STORAGE_CONNECTION_STRING via variável de ambiente
+        connectionString = System.getenv("AZURE_STORAGE_CONNECTION_STRING");
+        if (connectionString == null || connectionString.isBlank()) {
+            // Valor padrão seguro para testes (não expõe credenciais)
+            connectionString = "UseDevelopmentStorage=true";
+        }
         
         // Usar reflection para injetar connectionString e objectMapper
         java.lang.reflect.Field connectionField = QueueNotificationGatewayImpl.class.getDeclaredField("connectionString");

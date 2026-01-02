@@ -224,7 +224,7 @@ if (Test-Path $localSettingsSource) {
             FUNCTIONS_EXTENSION_VERSION = "~4"
             "mailtrap.api-token" = $mailtrapToken
             "admin.email" = $adminEmail
-            "azure.storage.connection-string" = "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;TableEndpoint=http://localhost:10002/devstoreaccount1;BlobEndpoint=http://localhost:10000/devstoreaccount1;QueueEndpoint=http://localhost:10001/devstoreaccount1;"
+            "azure.storage.connection-string" = "UseDevelopmentStorage=true"
             "azure.storage.container-name" = "weekly-reports"
             "azure.table.table-name" = "feedbacks"
             APP_ENVIRONMENT = "local"
