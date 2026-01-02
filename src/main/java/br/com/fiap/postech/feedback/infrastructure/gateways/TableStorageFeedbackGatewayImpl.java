@@ -54,24 +54,23 @@ public class TableStorageFeedbackGatewayImpl implements FeedbackGateway {
     @PostConstruct
     public void init() {
         try {
-            // Criar TableServiceClient para gerenciar tabelas
             tableServiceClient = new TableServiceClientBuilder()
                     .connectionString(storageConnectionString)
                     .buildClient();
             
-            // Criar tabela se não existir
             try {
                 tableServiceClient.createTableIfNotExists(tableName);
+                logger.info("Tabela '{}' criada ou já existe no Table Storage", tableName);
             } catch (TableServiceException e) {
-                // Status 409 (Conflict) significa que a tabela já existe - isso é esperado e não é erro
                 String errorMessage = e.getMessage();
-                if (errorMessage == null || (!errorMessage.contains("TableAlreadyExists") && !errorMessage.contains("409"))) {
-                    // Outros erros devem ser propagados
+                if (errorMessage != null && (errorMessage.contains("TableAlreadyExists") || errorMessage.contains("409"))) {
+                    logger.debug("Tabela '{}' já existe no Table Storage (isso é esperado)", tableName);
+                } else {
+                    logger.error("Erro ao criar tabela '{}' no Table Storage: {}", tableName, e.getMessage());
                     throw e;
                 }
             }
             
-            // Criar TableClient para operações na tabela
             tableClient = new TableClientBuilder()
                     .connectionString(storageConnectionString)
                     .tableName(tableName)
@@ -91,7 +90,6 @@ public class TableStorageFeedbackGatewayImpl implements FeedbackGateway {
 
     @PreDestroy
     public void cleanup() {
-        // TableClient não precisa ser fechado explicitamente
         logger.info("Table Storage desconectado");
     }
 
@@ -109,7 +107,7 @@ public class TableStorageFeedbackGatewayImpl implements FeedbackGateway {
             }
 
             TableEntity entity = TableStorageFeedbackMapper.toTableEntity(feedback);
-            logger.debug("Tentando salvar entidade no Table Storage: {}", entity.getRowKey());
+            logger.debug("Salvando entidade no Table Storage: {}", entity.getRowKey());
             
             tableClient.upsertEntity(entity);
 
@@ -126,26 +124,18 @@ public class TableStorageFeedbackGatewayImpl implements FeedbackGateway {
         validateTableClient();
         
         try {
-            // Converter Instant para LocalDateTime para comparar
             LocalDateTime fromDateTime = LocalDateTime.ofInstant(from, ZoneId.systemDefault());
             LocalDateTime toDateTime = LocalDateTime.ofInstant(to, ZoneId.systemDefault());
-            
-            // Table Storage não suporta queries complexas como Cosmos DB
-            // Vamos buscar todas as entidades e filtrar em memória
-            // Para produção com muitos dados, considere usar PartitionKey baseado em data
             
             List<Feedback> feedbacks = new ArrayList<>();
             
             logger.debug("Buscando feedbacks no período: {} até {}", fromDateTime, toDateTime);
             
-            // Iterar sobre todas as entidades
-            // Nota: Para grandes volumes, considere usar PartitionKey por data
             for (TableEntity entity : tableClient.listEntities()) {
                 String createdAtStr = (String) entity.getProperty("createdAt");
                 if (createdAtStr != null) {
                     LocalDateTime createdAt = LocalDateTime.parse(createdAtStr);
                     
-                    // Filtrar por período
                     if (!createdAt.isBefore(fromDateTime) && !createdAt.isAfter(toDateTime)) {
                         Feedback feedback = TableStorageFeedbackMapper.toEntity(entity);
                         feedbacks.add(feedback);
@@ -153,7 +143,6 @@ public class TableStorageFeedbackGatewayImpl implements FeedbackGateway {
                 }
             }
             
-            // Ordenar por data (mais recente primeiro)
             feedbacks.sort((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()));
             
             logger.debug("Encontrados {} feedbacks no período", feedbacks.size());
@@ -165,11 +154,6 @@ public class TableStorageFeedbackGatewayImpl implements FeedbackGateway {
         }
     }
 
-    /**
-     * Valida se o tableClient está inicializado.
-     * 
-     * @throws FeedbackPersistenceException se o tableClient não estiver inicializado
-     */
     private void validateTableClient() {
         if (tableClient == null) {
             throw new FeedbackPersistenceException(

@@ -40,7 +40,6 @@ public class Feedback {
         return feedback;
     }
 
-    // Getters
     public String getId() {
         return id;
     }

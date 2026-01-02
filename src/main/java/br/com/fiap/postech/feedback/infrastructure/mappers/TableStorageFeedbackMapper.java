@@ -24,7 +24,7 @@ public class TableStorageFeedbackMapper {
     private static final String CREATED_AT_PROPERTY = "createdAt";
 
     private TableStorageFeedbackMapper() {
-        // Classe utilitária - não deve ser instanciada
+        throw new UnsupportedOperationException("Classe utilitária - não deve ser instanciada");
     }
 
     /**

@@ -21,7 +21,7 @@ import org.slf4j.LoggerFactory;
  * - Validar dados de entrada
  * - Criar entidade de domínio
  * - Persistir feedback
- * - Notificar admin se crítico (via email direto)
+ * - Notificar admin se crítico (via fila Azure Queue Storage)
  */
 @ApplicationScoped
 public class CreateFeedbackUseCaseImpl implements CreateFeedbackUseCase {
@@ -61,18 +61,14 @@ public class CreateFeedbackUseCaseImpl implements CreateFeedbackUseCase {
 
         feedbackGateway.save(feedback);
 
-        // Notificação não bloqueante - publica na fila se crítico
         if (feedback.isCritical()) {
             try {
-                // Publica na fila Azure Queue Storage para processamento assíncrono
                 queueNotificationGateway.publishCritical(feedback);
                 logger.debug("Notificação crítica publicada na fila - ID: {}", feedback.getId());
             } catch (NotificationException e) {
-                // Loga o erro mas não falha a requisição - o feedback já foi salvo
                 logger.error("Erro ao publicar notificação crítica (feedback já salvo). ID: {}, Erro: {}", 
                     feedback.getId(), e.getMessage());
             } catch (Exception e) {
-                // Captura qualquer outra exceção inesperada
                 logger.error("Erro inesperado ao publicar notificação crítica (feedback já salvo). ID: {}, Erro: {}", 
                     feedback.getId(), e.getMessage());
             }

@@ -13,7 +13,6 @@ public record FeedbackResponse(
     LocalDateTime createdAt
 ) {
     public FeedbackResponse {
-        // Validação compacta do record
         if (id == null || id.isBlank()) {
             throw new IllegalArgumentException("ID não pode ser nulo ou vazio");
         }

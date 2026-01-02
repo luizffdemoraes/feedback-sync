@@ -53,7 +53,6 @@ public class QueueNotificationGatewayImpl implements QueueNotificationGateway {
                     .queueName(QUEUE_NAME)
                     .buildClient();
 
-            // Criar a fila se não existir
             queueClient.createIfNotExists();
             logger.info("Azure Queue Storage inicializado. Fila: {}", QUEUE_NAME);
         } catch (AzureException e) {
@@ -89,7 +88,6 @@ public class QueueNotificationGatewayImpl implements QueueNotificationGateway {
 
     @PreDestroy
     void cleanup() {
-        // QueueClient não precisa ser fechado explicitamente
         logger.info("Azure Queue Storage desconectado");
     }
 }
