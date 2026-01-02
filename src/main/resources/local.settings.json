@@ -7,6 +7,7 @@
 
     "mailtrap.api-token": "",
     "admin.email": "",
+    "mailtrap.inbox-id": "",
 
     "azure.storage.connection-string": "UseDevelopmentStorage=true",
     "azure.storage.container-name": "weekly-reports",

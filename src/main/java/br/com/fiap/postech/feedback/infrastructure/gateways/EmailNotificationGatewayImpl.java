@@ -34,14 +34,17 @@ public class EmailNotificationGatewayImpl implements EmailNotificationGateway {
 
     private final String mailtrapApiToken;
     private final String adminEmail;
+    private final Long mailtrapInboxId;
     private MailtrapClient mailtrapClient;
 
     @Inject
     public EmailNotificationGatewayImpl(
             @ConfigProperty(name = "mailtrap.api-token") String mailtrapApiToken,
-            @ConfigProperty(name = "admin.email") String adminEmail) {
+            @ConfigProperty(name = "admin.email") String adminEmail,
+            @ConfigProperty(name = "mailtrap.inbox-id") Long mailtrapInboxId) {
         this.mailtrapApiToken = mailtrapApiToken;
         this.adminEmail = adminEmail;
+        this.mailtrapInboxId = mailtrapInboxId;
     }
 
     @PostConstruct
@@ -50,15 +53,25 @@ public class EmailNotificationGatewayImpl implements EmailNotificationGateway {
         logger.debug("mailtrapApiToken configurado: {}", 
             mailtrapApiToken != null && !mailtrapApiToken.isBlank() ? "SIM (primeiros 8 chars: " + mailtrapApiToken.substring(0, Math.min(8, mailtrapApiToken.length())) + "...)" : "NÃO");
         logger.debug("adminEmail configurado: {}", adminEmail != null && !adminEmail.isBlank() ? adminEmail : "NÃO");
+        logger.debug("mailtrapInboxId configurado: {}", mailtrapInboxId != null ? mailtrapInboxId : "NÃO");
         
         if (mailtrapApiToken == null || mailtrapApiToken.isBlank()) {
             logger.warn("⚠ Mailtrap API Token não configurado. Emails não serão enviados.");
             return;
         }
         
+        if (mailtrapInboxId == null) {
+            logger.warn("⚠ Mailtrap Inbox ID não configurado. Configure MAILTRAP_INBOX_ID. Emails não serão enviados.");
+            return;
+        }
+        
         try {
             logger.debug("Criando configuração do Mailtrap...");
-            MailtrapConfig config = new MailtrapConfig.Builder()
+            logger.debug("Inbox ID: {}", mailtrapInboxId);
+            // Seguindo o padrão do exemplo oficial do Mailtrap
+            final MailtrapConfig config = new MailtrapConfig.Builder()
+                    .sandbox(true)
+                    .inboxId(mailtrapInboxId)
                     .token(mailtrapApiToken)
                     .build();
             
@@ -91,14 +104,16 @@ public class EmailNotificationGatewayImpl implements EmailNotificationGateway {
         logger.debug("adminEmail: {}", adminEmail);
 
         if (mailtrapClient == null) {
-            if (mailtrapApiToken == null || mailtrapApiToken.isBlank()) {
-                logger.warn("⚠ Mailtrap não configurado. Email não será enviado.");
+            if (mailtrapApiToken == null || mailtrapApiToken.isBlank() || mailtrapInboxId == null) {
+                logger.warn("⚠ Mailtrap não configurado completamente. Email não será enviado. Configure MAILTRAP_API_TOKEN e MAILTRAP_INBOX_ID.");
                 return; // Não falha se não estiver configurado (ambiente de desenvolvimento)
             }
             logger.error("✗ Mailtrap client é null mas token está configurado. Tentando reinicializar...");
-            // Tentar reinicializar
+            // Tentar reinicializar seguindo o padrão do exemplo oficial do Mailtrap
             try {
-                MailtrapConfig config = new MailtrapConfig.Builder()
+                final MailtrapConfig config = new MailtrapConfig.Builder()
+                        .sandbox(true)
+                        .inboxId(mailtrapInboxId)
                         .token(mailtrapApiToken)
                         .build();
                 mailtrapClient = MailtrapClientFactory.createMailtrapClient(config);
@@ -116,12 +131,13 @@ public class EmailNotificationGatewayImpl implements EmailNotificationGateway {
 
         try {
             logger.debug("Construindo objeto MailtrapMail...");
-            MailtrapMail mail = MailtrapMail.builder()
+            // Seguindo o padrão do exemplo oficial do Mailtrap
+            final MailtrapMail mail = MailtrapMail.builder()
                     .from(new Address("noreply@feedback-sync.com", "Feedback Sync"))
                     .to(List.of(new Address(adminEmail)))
                     .subject(subject)
-                    .category("Notificações")
                     .text(content)
+                    .category("Notificações")
                     .build();
 
             logger.debug("Enviando email via Mailtrap API...");
