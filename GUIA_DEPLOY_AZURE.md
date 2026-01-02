@@ -503,6 +503,115 @@ az webapp log tail `
 
 ---
 
+## 🗑️ Destruição de Recursos Azure
+
+### ⚠️ ATENÇÃO
+
+A destruição de recursos é uma operação **IRREVERSÍVEL**. Todos os dados serão perdidos permanentemente, incluindo:
+- Todos os feedbacks armazenados no Table Storage
+- Todos os relatórios semanais no Blob Storage
+- Todas as configurações da Function App
+- Application Settings e secrets
+
+### Opção 1: Script Automatizado (Recomendado)
+
+Use o script PowerShell para destruir todos os recursos:
+
+```powershell
+.\scripts\destruir-recursos-azure.ps1 `
+    -ResourceGroupName "feedback-rg" `
+    -Suffix "prod"
+```
+
+**Parâmetros:**
+- `-ResourceGroupName`: Nome do Resource Group (padrão: "feedback-rg")
+- `-Suffix`: Sufixo usado na criação dos recursos (padrão: "prod")
+- `-Force`: Pula confirmação (use com cuidado!)
+- `-DeleteResourceGroupOnly`: Deleta apenas o Resource Group (mais rápido)
+
+**Exemplos de uso:**
+
+```powershell
+# Destruição com confirmação interativa
+.\scripts\destruir-recursos-azure.ps1 -ResourceGroupName "feedback-rg" -Suffix "prod"
+
+# Destruição rápida (deleta apenas o Resource Group)
+.\scripts\destruir-recursos-azure.ps1 -ResourceGroupName "feedback-rg" -Suffix "prod" -DeleteResourceGroupOnly
+
+# Destruição sem confirmação (cuidado!)
+.\scripts\destruir-recursos-azure.ps1 -ResourceGroupName "feedback-rg" -Suffix "prod" -Force
+```
+
+### Opção 2: Destruição Manual via Azure CLI
+
+#### Deletar recursos individualmente:
+
+```powershell
+$resourceGroup = "feedback-rg"
+$suffix = "prod"
+$functionAppName = "feedback-function-$suffix"
+$storageAccountName = "feedbackstorage$suffix"
+
+# 1. Deletar Function App
+az functionapp delete --name $functionAppName --resource-group $resourceGroup --yes
+
+# 2. Deletar Storage Account
+az storage account delete --name $storageAccountName --resource-group $resourceGroup --yes
+
+# 3. Deletar Resource Group (remove tudo que restou)
+az group delete --name $resourceGroup --yes --no-wait
+```
+
+#### Deletar apenas o Resource Group (mais rápido):
+
+```powershell
+# Isso deleta TODOS os recursos dentro do Resource Group automaticamente
+az group delete --name "feedback-rg" --yes --no-wait
+```
+
+### Opção 3: Destruição via Azure Portal
+
+1. Acesse: https://portal.azure.com
+2. Navegue até **Resource Groups**
+3. Selecione o Resource Group `feedback-rg`
+4. Clique em **Delete resource group**
+5. Digite o nome do Resource Group para confirmar
+6. Clique em **Delete**
+
+### Verificar Status da Exclusão
+
+```powershell
+# Verificar se Resource Group ainda existe
+az group show --name "feedback-rg"
+
+# Listar todos os Resource Groups
+az group list --output table
+
+# Verificar logs de exclusão (via Portal)
+# Portal Azure > Resource Groups > Deleted resources
+```
+
+### ⏱️ Tempo de Exclusão
+
+- **Function App**: ~2-5 minutos
+- **Storage Account**: ~5-10 minutos (depende do tamanho)
+- **Resource Group**: ~10-15 minutos (processo completo)
+
+A exclusão do Resource Group é assíncrona. Use `--no-wait` para não bloquear o terminal.
+
+### 🔄 Recriar Recursos Após Destruição
+
+Após destruir os recursos, você pode recriá-los usando o script de criação:
+
+```powershell
+.\scripts\criar-recursos-azure.ps1 `
+    -ResourceGroupName "feedback-rg" `
+    -Location "brazilsouth" `
+    -Suffix "prod"
+```
+
+---
+
 ## 🎯 Próximos Passos
 
 Após o deploy bem-sucedido:
