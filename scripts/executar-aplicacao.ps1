@@ -42,6 +42,11 @@ Write-Host ""
 Write-Host "DICA: Quando ver 'Listening on: http://localhost:7071', a aplicacao estara pronta!" -ForegroundColor Green
 Write-Host ""
 
+# Mudar para o diretório raiz do projeto (onde está o mvnw.cmd)
+$scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
+$projectRoot = Split-Path -Parent $scriptPath
+Set-Location $projectRoot
+
 # Executa a aplicacao (nao em background para ver os logs)
 # No PowerShell, o -D precisa estar entre aspas
 $env:QUARKUS_PROFILE = 'local'
