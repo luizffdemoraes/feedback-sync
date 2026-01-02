@@ -92,15 +92,21 @@ $mailtrapToken = $env:MAILTRAP_API_TOKEN
 $adminEmail = $env:ADMIN_EMAIL
 
 if ([string]::IsNullOrWhiteSpace($mailtrapToken)) {
-    Write-Host "   [⚠] MAILTRAP_API_TOKEN não configurado" -ForegroundColor Yellow
+    Write-Host "   [X] MAILTRAP_API_TOKEN não configurado" -ForegroundColor Red
     Write-Host "   Configure: `$env:MAILTRAP_API_TOKEN = 'seu-token'" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "❌ É necessário configurar MAILTRAP_API_TOKEN antes de executar" -ForegroundColor Red
+    exit 1
 } else {
     Write-Host "   [OK] MAILTRAP_API_TOKEN configurado" -ForegroundColor Green
 }
 
 if ([string]::IsNullOrWhiteSpace($adminEmail)) {
-    Write-Host "   [⚠] ADMIN_EMAIL não configurado" -ForegroundColor Yellow
+    Write-Host "   [X] ADMIN_EMAIL não configurado" -ForegroundColor Red
     Write-Host "   Configure: `$env:ADMIN_EMAIL = 'seu-email@exemplo.com'" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "❌ É necessário configurar ADMIN_EMAIL antes de executar" -ForegroundColor Red
+    exit 1
 } else {
     Write-Host "   [OK] ADMIN_EMAIL configurado: $adminEmail" -ForegroundColor Green
 }
@@ -112,40 +118,141 @@ $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
 $projectRoot = Split-Path -Parent $scriptPath
 Set-Location $projectRoot
 
-# Compilar o projeto
-Write-Host "Compilando projeto..." -ForegroundColor Yellow
-Write-Host "   (Isso pode levar alguns minutos na primeira vez)" -ForegroundColor Gray
-Write-Host ""
+# Verificar se já existe compilação do Azure Functions
+$functionsDir = Join-Path $projectRoot "target\azure-functions\feedback-service-app"
+$needsCompile = $true
 
-.\mvnw.cmd clean package -DskipTests
-
-if ($LASTEXITCODE -ne 0) {
-    Write-Host ""
-    Write-Host "❌ Erro ao compilar o projeto" -ForegroundColor Red
-    exit 1
+if (Test-Path $functionsDir) {
+    Write-Host "Verificando se precisa recompilar..." -ForegroundColor Yellow
+    $lastCompile = (Get-ChildItem $functionsDir -Recurse | Sort-Object LastWriteTime -Descending | Select-Object -First 1).LastWriteTime
+    $sourceFiles = Get-ChildItem -Path (Join-Path $projectRoot "src") -Recurse -Include *.java | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    
+    if ($sourceFiles -and $lastCompile -gt $sourceFiles.LastWriteTime) {
+        Write-Host "   [OK] Compilação existente está atualizada" -ForegroundColor Green
+        $needsCompile = $false
+    } else {
+        Write-Host "   [⚠] Código-fonte foi modificado, precisa recompilar" -ForegroundColor Yellow
+    }
 }
 
-Write-Host ""
-Write-Host "✅ Compilação concluída" -ForegroundColor Green
-Write-Host ""
+# Compilar o projeto (apenas se necessário)
+if ($needsCompile) {
+    Write-Host ""
+    Write-Host "Compilando projeto..." -ForegroundColor Yellow
+    Write-Host "   (Isso pode levar alguns minutos na primeira vez)" -ForegroundColor Gray
+    Write-Host "   NOTA: Usando 'package' sem 'clean' para evitar conflito com aplicação rodando" -ForegroundColor Gray
+    Write-Host ""
+    
+    # Usa apenas 'package' sem 'clean' para evitar conflito com aplicação Quarkus rodando
+    .\mvnw.cmd package -DskipTests
+    
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host ""
+        Write-Host "❌ Erro ao compilar o projeto" -ForegroundColor Red
+        Write-Host ""
+        Write-Host "DICA: Se o erro for relacionado a arquivos em uso, pare a aplicação Quarkus primeiro (Ctrl+C)" -ForegroundColor Yellow
+        exit 1
+    }
+    
+    Write-Host ""
+    Write-Host "✅ Compilação concluída" -ForegroundColor Green
+} else {
+    Write-Host ""
+    Write-Host "✅ Usando compilação existente" -ForegroundColor Green
+}
 
 # Verificar se o diretório de output existe
-$functionsDir = Join-Path $projectRoot "target\azure-functions\feedback-service-app"
+if (-not $functionsDir) {
+    $functionsDir = Join-Path $projectRoot "target\azure-functions\feedback-service-app"
+}
 if (-not (Test-Path $functionsDir)) {
     Write-Host "❌ Diretório de Azure Functions não encontrado: $functionsDir" -ForegroundColor Red
     Write-Host "   Verifique se a compilação foi bem-sucedida" -ForegroundColor Yellow
     exit 1
 }
 
-# Copiar local.settings.json para o diretório de output
+# Atualizar local.settings.json com variáveis de ambiente
+Write-Host "Atualizando configurações do Azure Functions..." -ForegroundColor Yellow
 $localSettingsSource = Join-Path $projectRoot "src\main\resources\local.settings.json"
 $localSettingsTarget = Join-Path $functionsDir "local.settings.json"
 
+Write-Host "   Lendo variáveis de ambiente..." -ForegroundColor Gray
+Write-Host "   - MAILTRAP_API_TOKEN: $(if ($mailtrapToken) { 'configurado (' + $mailtrapToken.Substring(0, [Math]::Min(8, $mailtrapToken.Length)) + '...)' } else { 'NÃO configurado' })" -ForegroundColor Gray
+Write-Host "   - ADMIN_EMAIL: $(if ($adminEmail) { $adminEmail } else { 'NÃO configurado' })" -ForegroundColor Gray
+
 if (Test-Path $localSettingsSource) {
-    Copy-Item -Path $localSettingsSource -Destination $localSettingsTarget -Force
-    Write-Host "✅ Configurações locais copiadas" -ForegroundColor Green
+    # Ler o JSON atual
+    Write-Host "   Lendo arquivo fonte: $localSettingsSource" -ForegroundColor Gray
+    $localSettings = Get-Content -Path $localSettingsSource -Raw | ConvertFrom-Json
+    
+    # Atualizar valores com variáveis de ambiente
+    Write-Host "   Aplicando variáveis de ambiente ao local.settings.json..." -ForegroundColor Gray
+    $localSettings.Values."mailtrap.api-token" = $mailtrapToken
+    $localSettings.Values."admin.email" = $adminEmail
+    
+    # Salvar no diretório de output
+    Write-Host "   Salvando em: $localSettingsTarget" -ForegroundColor Gray
+    $localSettings | ConvertTo-Json -Depth 10 | Set-Content -Path $localSettingsTarget -Force
+    
+    Write-Host ""
+    Write-Host "   ✅ Configurações atualizadas com sucesso!" -ForegroundColor Green
+    Write-Host "   ✅ mailtrap.api-token: aplicado (primeiros 8 caracteres: $($mailtrapToken.Substring(0, [Math]::Min(8, $mailtrapToken.Length)))...)" -ForegroundColor Green
+    Write-Host "   ✅ admin.email: $adminEmail" -ForegroundColor Green
+    
+    # Verificar se os valores foram realmente salvos
+    Write-Host ""
+    Write-Host "   Verificando valores salvos..." -ForegroundColor Gray
+    $savedSettings = Get-Content -Path $localSettingsTarget -Raw | ConvertFrom-Json
+    $savedToken = $savedSettings.Values."mailtrap.api-token"
+    $savedEmail = $savedSettings.Values."admin.email"
+    
+    if ($savedToken -eq $mailtrapToken -and $savedEmail -eq $adminEmail) {
+        Write-Host "   ✅ Validação: Valores confirmados no arquivo" -ForegroundColor Green
+    } else {
+        Write-Host "   ⚠️  Validação: Possível inconsistência detectada" -ForegroundColor Yellow
+    }
 } else {
     Write-Host "⚠️  Arquivo local.settings.json não encontrado" -ForegroundColor Yellow
+    Write-Host "   Criando arquivo básico..." -ForegroundColor Yellow
+    
+    # Criar arquivo básico se não existir
+    $basicSettings = @{
+        IsEncrypted = $false
+        Values = @{
+            AzureWebJobsStorage = "UseDevelopmentStorage=true"
+            FUNCTIONS_WORKER_RUNTIME = "java"
+            FUNCTIONS_EXTENSION_VERSION = "~4"
+            "mailtrap.api-token" = $mailtrapToken
+            "admin.email" = $adminEmail
+            "azure.storage.connection-string" = "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;TableEndpoint=http://localhost:10002/devstoreaccount1;BlobEndpoint=http://localhost:10000/devstoreaccount1;QueueEndpoint=http://localhost:10001/devstoreaccount1;"
+            "azure.storage.container-name" = "weekly-reports"
+            "azure.table.table-name" = "feedbacks"
+            APP_ENVIRONMENT = "local"
+            APP_DEBUG = "true"
+        }
+        Host = @{
+            LocalHttpPort = 7071
+            CORS = "*"
+            CORSCredentials = $false
+        }
+    }
+    
+    $basicSettings | ConvertTo-Json -Depth 10 | Set-Content -Path $localSettingsTarget -Force
+    Write-Host "   [OK] Arquivo criado com configurações básicas" -ForegroundColor Green
+}
+
+# Copiar host.json se existir no diretório de recursos
+Write-Host ""
+Write-Host "Verificando host.json..." -ForegroundColor Yellow
+$hostJsonSource = Join-Path $projectRoot "src\main\resources\host.json"
+$hostJsonTarget = Join-Path $functionsDir "host.json"
+
+if (Test-Path $hostJsonSource) {
+    Write-Host "   Copiando host.json de $hostJsonSource para $hostJsonTarget" -ForegroundColor Gray
+    Copy-Item -Path $hostJsonSource -Destination $hostJsonTarget -Force
+    Write-Host "   ✅ host.json copiado com sucesso" -ForegroundColor Green
+} else {
+    Write-Host "   [⚠] host.json não encontrado em $hostJsonSource (usando padrão)" -ForegroundColor Yellow
 }
 
 Write-Host ""

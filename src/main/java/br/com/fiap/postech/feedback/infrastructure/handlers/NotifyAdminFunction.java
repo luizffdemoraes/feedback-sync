@@ -52,16 +52,57 @@ public class NotifyAdminFunction {
             ) String message,
             final ExecutionContext context) {
 
+        logger.info("=== NotifyAdminFunction iniciada ===");
+        logger.info("Mensagem recebida da fila (primeiros 200 chars): {}", 
+            message != null && message.length() > 200 ? message.substring(0, 200) + "..." : message);
+        
         try {
-            Feedback feedback = objectMapper.readValue(message, Feedback.class);
-            logger.info("Processando feedback crítico - ID: {}, Nota: {}", 
-                feedback.getId(), feedback.getScore().getValue());
+            // Validação inicial
+            if (message == null || message.isBlank()) {
+                logger.error("Mensagem recebida está vazia ou nula");
+                throw new FunctionProcessingException("Mensagem da fila está vazia ou nula");
+            }
 
-            emailGateway.sendAdminNotification(buildEmailContent(feedback));
-            logger.info("Notificação enviada com sucesso - ID: {}", feedback.getId());
+            if (objectMapper == null) {
+                logger.error("ObjectMapper não foi injetado corretamente");
+                throw new FunctionProcessingException("ObjectMapper não disponível");
+            }
+
+            if (emailGateway == null) {
+                logger.error("EmailNotificationGateway não foi injetado corretamente");
+                throw new FunctionProcessingException("EmailNotificationGateway não disponível");
+            }
+
+            logger.debug("Iniciando deserialização do JSON...");
+            Feedback feedback = objectMapper.readValue(message, Feedback.class);
+            
+            if (feedback == null) {
+                logger.error("Feedback deserializado é nulo");
+                throw new FunctionProcessingException("Feedback deserializado é nulo");
+            }
+
+            logger.info("Feedback deserializado com sucesso - ID: {}, Nota: {}, Descrição: {}", 
+                feedback.getId(), 
+                feedback.getScore() != null ? feedback.getScore().getValue() : "N/A",
+                feedback.getDescription() != null ? feedback.getDescription().substring(0, Math.min(50, feedback.getDescription().length())) : "N/A");
+
+            logger.debug("Construindo conteúdo do email...");
+            String emailContent = buildEmailContent(feedback);
+            
+            logger.debug("Enviando notificação via emailGateway...");
+            emailGateway.sendAdminNotification(emailContent);
+            
+            logger.info("✓ Notificação enviada com sucesso - ID: {}", feedback.getId());
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            logger.error("Erro ao deserializar JSON da mensagem. Mensagem: {}", message, e);
+            throw new FunctionProcessingException("Falha ao deserializar mensagem JSON: " + e.getMessage(), e);
+        } catch (FunctionProcessingException e) {
+            logger.error("Erro conhecido ao processar notificação", e);
+            throw e;
         } catch (Exception e) {
-            logger.error("Erro ao processar notificação", e);
-            throw new FunctionProcessingException("Falha ao processar notificação crítica", e);
+            logger.error("Erro inesperado ao processar notificação. Tipo: {}, Mensagem: {}", 
+                e.getClass().getName(), e.getMessage(), e);
+            throw new FunctionProcessingException("Falha ao processar notificação crítica: " + e.getMessage(), e);
         }
     }
 
