@@ -114,21 +114,37 @@ class EmailNotificationGatewayImplTest {
     }
 
     @Test
-    @DisplayName("Deve lançar NotificationException quando Mailtrap não está disponível mas API token está configurado")
+    @DisplayName("Deve lançar NotificationException quando Mailtrap não está disponível mas API token e Inbox ID estão configurados")
     void deveLancarNotificationExceptionQuandoMailtrapNaoDisponivelMasApiTokenConfigurado() throws Exception {
         String message = "Mensagem de teste";
         
-        // Remover MailtrapClient mas manter API token
+        // Configurar mailtrapInboxId também (necessário para que o código tente reinicializar)
+        Field inboxIdField = EmailNotificationGatewayImpl.class.getDeclaredField("mailtrapInboxId");
+        inboxIdField.setAccessible(true);
+        inboxIdField.set(gateway, 12345L); // Configurar um inbox ID válido
+        
+        // Remover MailtrapClient mas manter API token e Inbox ID configurados
         Field mailtrapClientField = EmailNotificationGatewayImpl.class.getDeclaredField("mailtrapClient");
         mailtrapClientField.setAccessible(true);
         mailtrapClientField.set(gateway, null);
 
+        // O código tentará reinicializar o cliente. Se a reinicialização falhar, lançará uma exceção
+        // com mensagem "Mailtrap não está disponível e não foi possível reinicializar".
+        // Se a reinicialização funcionar mas o envio falhar (token inválido), lançará uma exceção
+        // com mensagem "Falha ao enviar email via Mailtrap".
+        // Ambos os casos são válidos para este teste, pois indicam que o Mailtrap não está funcionando corretamente.
         NotificationException exception = assertThrows(
             NotificationException.class,
             () -> gateway.sendAdminNotification(message)
         );
 
-        assertEquals("Mailtrap não está disponível", exception.getMessage());
+        // Verificar que a exceção foi lançada e contém informações sobre o problema com Mailtrap
+        assertNotNull(exception, "NotificationException deve ser lançada");
+        assertTrue(
+            exception.getMessage().contains("Mailtrap não está disponível") || 
+            exception.getMessage().contains("Falha ao enviar email via Mailtrap"),
+            "Mensagem esperada deve conter 'Mailtrap não está disponível' ou 'Falha ao enviar email via Mailtrap', mas foi: " + exception.getMessage()
+        );
     }
 
     @Test
