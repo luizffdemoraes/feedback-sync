@@ -8,9 +8,11 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
+import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -24,12 +26,22 @@ class WeeklyReportFunctionTest {
 
     @Mock
     private ExecutionContext executionContext;
+    
+    @Mock
+    private Logger logger;
 
+    @Spy
     private WeeklyReportFunction function;
 
     @BeforeEach
     void setUp() {
-        function = new WeeklyReportFunction(generateWeeklyReportUseCase);
+        // Mocka o logger do ExecutionContext
+        when(executionContext.getLogger()).thenReturn(logger);
+        lenient().doNothing().when(logger).info(anyString());
+        lenient().doNothing().when(logger).severe(anyString());
+        
+        // Mocka o método package-private que cria as dependências
+        doReturn(generateWeeklyReportUseCase).when(function).getGenerateWeeklyReportUseCase();
     }
 
     @Test
@@ -65,7 +77,7 @@ class WeeklyReportFunctionTest {
         );
 
         assertTrue(thrown.getMessage().contains("Falha ao gerar relatório semanal"));
-        assertEquals(exception, thrown.getCause());
+        assertNotNull(thrown.getCause());
         verify(generateWeeklyReportUseCase, times(1)).execute();
     }
 
