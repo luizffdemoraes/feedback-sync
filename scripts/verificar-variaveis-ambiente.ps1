@@ -33,8 +33,21 @@ if ([string]::IsNullOrWhiteSpace($adminEmail)) {
 
 Write-Host ""
 
+# Verificar MAILTRAP_INBOX_ID
+Write-Host "3. MAILTRAP_INBOX_ID:" -ForegroundColor Yellow
+$mailtrapInboxId = $env:MAILTRAP_INBOX_ID
+if ([string]::IsNullOrWhiteSpace($mailtrapInboxId)) {
+    Write-Host "   [X] NAO configurado" -ForegroundColor Red
+    Write-Host '   Configure com: $env:MAILTRAP_INBOX_ID = "seu-inbox-id"' -ForegroundColor Gray
+    Write-Host "   Obtenha o ID da sua inbox no painel do Mailtrap" -ForegroundColor Gray
+} else {
+    Write-Host "   [OK] Configurado: $mailtrapInboxId" -ForegroundColor Green
+}
+
+Write-Host ""
+
 # Verificar se o arquivo local.settings.json existe
-Write-Host "3. Arquivo local.settings.json:" -ForegroundColor Yellow
+Write-Host "4. Arquivo local.settings.json:" -ForegroundColor Yellow
 $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
 $projectRoot = Split-Path -Parent $scriptPath
 $localSettingsPath = Join-Path $projectRoot "src\main\resources\local.settings.json"
@@ -46,6 +59,7 @@ if (Test-Path $localSettingsPath) {
     $localSettings = Get-Content -Path $localSettingsPath -Raw | ConvertFrom-Json
     $fileToken = $localSettings.Values."mailtrap.api-token"
     $fileEmail = $localSettings.Values."admin.email"
+    $fileInboxId = $localSettings.Values."mailtrap.inbox-id"
     
     Write-Host "   Valores no arquivo fonte (template):" -ForegroundColor Gray
     $tokenStatus = if ([string]::IsNullOrWhiteSpace($fileToken)) { 
@@ -72,6 +86,18 @@ if (Test-Path $localSettingsPath) {
     }
     Write-Host "   - admin.email: $emailStatus" -ForegroundColor $emailColor
     
+    $inboxIdStatus = if ([string]::IsNullOrWhiteSpace($fileInboxId)) { 
+        "(vazio - correto para template)" 
+    } else { 
+        $fileInboxId 
+    }
+    $inboxIdColor = if ([string]::IsNullOrWhiteSpace($fileInboxId)) { 
+        "Gray" 
+    } else { 
+        "Yellow" 
+    }
+    Write-Host "   - mailtrap.inbox-id: $inboxIdStatus" -ForegroundColor $inboxIdColor
+    
     Write-Host ""
     Write-Host "   NOTA: O arquivo fonte deve ter valores vazios (e um template)." -ForegroundColor Cyan
     Write-Host "      O script executar-azure-functions-local.ps1 atualiza automaticamente" -ForegroundColor Cyan
@@ -83,7 +109,7 @@ if (Test-Path $localSettingsPath) {
 Write-Host ""
 
 # Verificar se existe o arquivo de destino (apos compilacao)
-Write-Host "4. Arquivo local.settings.json de destino (apos compilacao):" -ForegroundColor Yellow
+Write-Host "5. Arquivo local.settings.json de destino (apos compilacao):" -ForegroundColor Yellow
 $functionsDir = Join-Path $projectRoot "target\azure-functions\feedback-service-app"
 $localSettingsTarget = Join-Path $functionsDir "local.settings.json"
 
@@ -94,6 +120,7 @@ if (Test-Path $localSettingsTarget) {
     $targetSettings = Get-Content -Path $localSettingsTarget -Raw | ConvertFrom-Json
     $targetToken = $targetSettings.Values."mailtrap.api-token"
     $targetEmail = $targetSettings.Values."admin.email"
+    $targetInboxId = $targetSettings.Values."mailtrap.inbox-id"
     
     Write-Host "   Valores no arquivo de destino:" -ForegroundColor Gray
     if ([string]::IsNullOrWhiteSpace($targetToken)) {
@@ -113,13 +140,34 @@ if (Test-Path $localSettingsTarget) {
         Write-Host "   - admin.email: $targetEmail [OK]" -ForegroundColor Green
     }
     
+    if ([string]::IsNullOrWhiteSpace($targetInboxId)) {
+        Write-Host "   - mailtrap.inbox-id: [VAZIO] Precisa ser atualizado pelo script" -ForegroundColor Yellow
+    } else {
+        Write-Host "   - mailtrap.inbox-id: $targetInboxId [OK]" -ForegroundColor Green
+    }
+    
     # Comparar com variaveis de ambiente
     Write-Host ""
     Write-Host "   Comparacao com variaveis de ambiente:" -ForegroundColor Gray
-    if ($targetToken -eq $mailtrapToken -and $targetEmail -eq $adminEmail) {
+    $tokenMatch = $targetToken -eq $mailtrapToken
+    $emailMatch = $targetEmail -eq $adminEmail
+    $inboxIdMatch = $targetInboxId -eq $mailtrapInboxId
+    
+    if ($tokenMatch -and $emailMatch -and $inboxIdMatch) {
         Write-Host "   [OK] Valores sincronizados corretamente!" -ForegroundColor Green
     } else {
         Write-Host "   [AVISO] Valores NAO sincronizados" -ForegroundColor Yellow
+        if (-not $tokenMatch) {
+            Write-Host "      - mailtrap.api-token: DIFERENTE" -ForegroundColor Yellow
+        }
+        if (-not $emailMatch) {
+            Write-Host "      - admin.email: DIFERENTE" -ForegroundColor Yellow
+        }
+        if (-not $inboxIdMatch) {
+            Write-Host "      - mailtrap.inbox-id: DIFERENTE" -ForegroundColor Yellow
+            Write-Host "         Arquivo: '$targetInboxId' | Variavel: '$mailtrapInboxId'" -ForegroundColor Gray
+        }
+        Write-Host ""
         Write-Host "      Execute: .\scripts\executar-azure-functions-local.ps1" -ForegroundColor Yellow
         Write-Host "      para atualizar o arquivo de destino" -ForegroundColor Yellow
     }
@@ -134,7 +182,7 @@ Write-Host "============================================================" -Foreg
 Write-Host ""
 
 # Resumo final
-if (-not [string]::IsNullOrWhiteSpace($mailtrapToken) -and -not [string]::IsNullOrWhiteSpace($adminEmail)) {
+if (-not [string]::IsNullOrWhiteSpace($mailtrapToken) -and -not [string]::IsNullOrWhiteSpace($adminEmail) -and -not [string]::IsNullOrWhiteSpace($mailtrapInboxId)) {
     Write-Host "[OK] Todas as variaveis de ambiente estao configuradas!" -ForegroundColor Green
     Write-Host ""
     Write-Host "Proximo passo:" -ForegroundColor Cyan
@@ -144,4 +192,7 @@ if (-not [string]::IsNullOrWhiteSpace($mailtrapToken) -and -not [string]::IsNull
     Write-Host ""
     Write-Host '   $env:MAILTRAP_API_TOKEN = "seu-token"' -ForegroundColor White
     Write-Host '   $env:ADMIN_EMAIL = "seu-email@exemplo.com"' -ForegroundColor White
+    Write-Host '   $env:MAILTRAP_INBOX_ID = "seu-inbox-id"' -ForegroundColor White
+    Write-Host ""
+    Write-Host "   Obtenha o Inbox ID no painel do Mailtrap (Settings > Inboxes)" -ForegroundColor Gray
 }

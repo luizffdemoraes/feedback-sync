@@ -90,6 +90,7 @@ Write-Host ""
 Write-Host "Verificando configurações do Mailtrap..." -ForegroundColor Yellow
 $mailtrapToken = $env:MAILTRAP_API_TOKEN
 $adminEmail = $env:ADMIN_EMAIL
+$mailtrapInboxId = $env:MAILTRAP_INBOX_ID
 
 if ([string]::IsNullOrWhiteSpace($mailtrapToken)) {
     Write-Host "   [X] MAILTRAP_API_TOKEN não configurado" -ForegroundColor Red
@@ -109,6 +110,17 @@ if ([string]::IsNullOrWhiteSpace($adminEmail)) {
     exit 1
 } else {
     Write-Host "   [OK] ADMIN_EMAIL configurado: $adminEmail" -ForegroundColor Green
+}
+
+if ([string]::IsNullOrWhiteSpace($mailtrapInboxId)) {
+    Write-Host "   [X] MAILTRAP_INBOX_ID não configurado" -ForegroundColor Red
+    Write-Host "   Configure: `$env:MAILTRAP_INBOX_ID = 'seu-inbox-id'" -ForegroundColor Gray
+    Write-Host "   Obtenha o ID da sua inbox no painel do Mailtrap (Settings > Inboxes)" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "❌ É necessário configurar MAILTRAP_INBOX_ID antes de executar" -ForegroundColor Red
+    exit 1
+} else {
+    Write-Host "   [OK] MAILTRAP_INBOX_ID configurado: $mailtrapInboxId" -ForegroundColor Green
 }
 
 Write-Host ""
@@ -179,64 +191,122 @@ $localSettingsTarget = Join-Path $functionsDir "local.settings.json"
 Write-Host "   Lendo variáveis de ambiente..." -ForegroundColor Gray
 Write-Host "   - MAILTRAP_API_TOKEN: $(if ($mailtrapToken) { 'configurado (' + $mailtrapToken.Substring(0, [Math]::Min(8, $mailtrapToken.Length)) + '...)' } else { 'NÃO configurado' })" -ForegroundColor Gray
 Write-Host "   - ADMIN_EMAIL: $(if ($adminEmail) { $adminEmail } else { 'NÃO configurado' })" -ForegroundColor Gray
+Write-Host "   - MAILTRAP_INBOX_ID: $(if ($mailtrapInboxId) { $mailtrapInboxId } else { 'NÃO configurado' })" -ForegroundColor Gray
 
 if (Test-Path $localSettingsSource) {
     # Ler o JSON atual
     Write-Host "   Lendo arquivo fonte: $localSettingsSource" -ForegroundColor Gray
     $localSettings = Get-Content -Path $localSettingsSource -Raw | ConvertFrom-Json
     
+    # Garantir que a propriedade Values existe
+    if (-not $localSettings.Values) {
+        $localSettings | Add-Member -MemberType NoteProperty -Name "Values" -Value @{}
+    }
+    
     # Atualizar valores com variáveis de ambiente
     Write-Host "   Aplicando variáveis de ambiente ao local.settings.json..." -ForegroundColor Gray
-    $localSettings.Values."mailtrap.api-token" = $mailtrapToken
-    $localSettings.Values."admin.email" = $adminEmail
+    
+    # Garantir que todas as propriedades existam antes de atribuir valores
+    # Verificar e criar propriedades se não existirem
+    $propertiesToCheck = @("mailtrap.api-token", "admin.email", "mailtrap.inbox-id")
+    foreach ($propName in $propertiesToCheck) {
+        if (-not $localSettings.Values.PSObject.Properties[$propName]) {
+            Write-Host "   Criando propriedade: $propName" -ForegroundColor Gray
+            $localSettings.Values | Add-Member -MemberType NoteProperty -Name $propName -Value "" -Force
+        }
+    }
+    
+    # Atualizar valores diretamente (garantir que sejam strings)
+    Write-Host "   Atribuindo valores das variáveis de ambiente..." -ForegroundColor Gray
+    $localSettings.Values."mailtrap.api-token" = [string]$mailtrapToken
+    $localSettings.Values."admin.email" = [string]$adminEmail
+    $localSettings.Values."mailtrap.inbox-id" = [string]$mailtrapInboxId
+    
+    # Verificar imediatamente após atribuir
+    Write-Host "   Verificação imediata - mailtrap.inbox-id: '$($localSettings.Values.'mailtrap.inbox-id')'" -ForegroundColor Cyan
+    
+    Write-Host "   Debug - mailtrap.inbox-id será salvo como: '$mailtrapInboxId' (tipo: $($mailtrapInboxId.GetType().Name))" -ForegroundColor Cyan
+    Write-Host "   Debug - Verificando antes de salvar: '$($localSettings.Values.'mailtrap.inbox-id')'" -ForegroundColor Cyan
     
     # Salvar no diretório de output
     Write-Host "   Salvando em: $localSettingsTarget" -ForegroundColor Gray
-    $localSettings | ConvertTo-Json -Depth 10 | Set-Content -Path $localSettingsTarget -Force
+    $jsonContent = $localSettings | ConvertTo-Json -Depth 10
+    Set-Content -Path $localSettingsTarget -Value $jsonContent -Force -NoNewline
     
     Write-Host ""
     Write-Host "   ✅ Configurações atualizadas com sucesso!" -ForegroundColor Green
     Write-Host "   ✅ mailtrap.api-token: aplicado (primeiros 8 caracteres: $($mailtrapToken.Substring(0, [Math]::Min(8, $mailtrapToken.Length)))...)" -ForegroundColor Green
     Write-Host "   ✅ admin.email: $adminEmail" -ForegroundColor Green
+    Write-Host "   ✅ mailtrap.inbox-id: $mailtrapInboxId" -ForegroundColor Green
     
     # Verificar se os valores foram realmente salvos
     Write-Host ""
     Write-Host "   Verificando valores salvos..." -ForegroundColor Gray
+
+    # Aguardar um momento para garantir que o arquivo foi escrito
+    Start-Sleep -Milliseconds 100
     $savedSettings = Get-Content -Path $localSettingsTarget -Raw | ConvertFrom-Json
     $savedToken = $savedSettings.Values."mailtrap.api-token"
     $savedEmail = $savedSettings.Values."admin.email"
+    $savedInboxId = $savedSettings.Values."mailtrap.inbox-id"
     
-    if ($savedToken -eq $mailtrapToken -and $savedEmail -eq $adminEmail) {
+    Write-Host "   Debug - Valores lidos do arquivo salvo:" -ForegroundColor Cyan
+    Write-Host "      mailtrap.api-token: '$savedToken'" -ForegroundColor Gray
+    Write-Host "      admin.email: '$savedEmail'" -ForegroundColor Gray
+    Write-Host "      mailtrap.inbox-id: '$savedInboxId' (tipo: $(if ($savedInboxId) { $savedInboxId.GetType().Name } else { 'null' }))" -ForegroundColor Gray
+    
+    # Comparação com conversão para string para garantir compatibilidade
+    $tokenMatch = [string]$savedToken -eq [string]$mailtrapToken
+    $emailMatch = [string]$savedEmail -eq [string]$adminEmail
+    $inboxIdMatch = [string]$savedInboxId -eq [string]$mailtrapInboxId
+    
+    if ($tokenMatch -and $emailMatch -and $inboxIdMatch) {
         Write-Host "   ✅ Validação: Valores confirmados no arquivo" -ForegroundColor Green
     } else {
         Write-Host "   ⚠️  Validação: Possível inconsistência detectada" -ForegroundColor Yellow
+        if (-not $tokenMatch) {
+            Write-Host "      Problema detectado: mailtrap.api-token" -ForegroundColor Yellow
+            Write-Host "      Esperado: '$mailtrapToken' | Encontrado: '$savedToken'" -ForegroundColor Yellow
+        }
+        if (-not $emailMatch) {
+            Write-Host "      Problema detectado: admin.email" -ForegroundColor Yellow
+            Write-Host "      Esperado: '$adminEmail' | Encontrado: '$savedEmail'" -ForegroundColor Yellow
+        }
+        if (-not $inboxIdMatch) {
+            Write-Host "      Problema detectado: mailtrap.inbox-id" -ForegroundColor Yellow
+            Write-Host "      Esperado: '$mailtrapInboxId' | Encontrado: '$savedInboxId'" -ForegroundColor Yellow
+        }
     }
 } else {
     Write-Host "⚠️  Arquivo local.settings.json não encontrado" -ForegroundColor Yellow
     Write-Host "   Criando arquivo básico..." -ForegroundColor Yellow
     
     # Criar arquivo básico se não existir
-    $basicSettings = @{
-        IsEncrypted = $false
-        Values = @{
-            AzureWebJobsStorage = "UseDevelopmentStorage=true"
-            FUNCTIONS_WORKER_RUNTIME = "java"
-            FUNCTIONS_EXTENSION_VERSION = "~4"
-            "mailtrap.api-token" = $mailtrapToken
-            "admin.email" = $adminEmail
-            "azure.storage.connection-string" = "UseDevelopmentStorage=true"
-            "azure.storage.container-name" = "weekly-reports"
-            "azure.table.table-name" = "feedbacks"
-            APP_ENVIRONMENT = "local"
-            APP_DEBUG = "true"
-        }
-        Host = @{
-            LocalHttpPort = 7071
-            CORS = "*"
-            CORSCredentials = $false
-        }
+    # Converter valores para string antes de criar o hashtable
+    $mailtrapTokenStr = [string]$mailtrapToken
+    $adminEmailStr = [string]$adminEmail
+    $mailtrapInboxIdStr = [string]$mailtrapInboxId
+    
+    # Criar hashtables separadamente para evitar problemas de sintaxe
+    $valuesHash = @{
+        AzureWebJobsStorage = "UseDevelopmentStorage=true"
+        FUNCTIONS_WORKER_RUNTIME = "java"
+        FUNCTIONS_EXTENSION_VERSION = "~4"
+        "mailtrap.api-token" = $mailtrapTokenStr
+        "admin.email" = $adminEmailStr
+        "mailtrap.inbox-id" = $mailtrapInboxIdStr
+        "azure.storage.connection-string" = "UseDevelopmentStorage=true"
+        "azure.storage.container-name" = "weekly-reports"
+        "azure.table.table-name" = "feedbacks"
+        APP_ENVIRONMENT = "local"
+        APP_DEBUG = "true"
     }
     
+    $basicSettings = @{
+        IsEncrypted = $false
+        Values = $valuesHash
+    }
+
     $basicSettings | ConvertTo-Json -Depth 10 | Set-Content -Path $localSettingsTarget -Force
     Write-Host "   [OK] Arquivo criado com configurações básicas" -ForegroundColor Green
 }

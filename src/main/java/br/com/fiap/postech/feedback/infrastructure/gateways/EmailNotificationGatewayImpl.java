@@ -41,10 +41,27 @@ public class EmailNotificationGatewayImpl implements EmailNotificationGateway {
     public EmailNotificationGatewayImpl(
             @ConfigProperty(name = "mailtrap.api-token") String mailtrapApiToken,
             @ConfigProperty(name = "admin.email") String adminEmail,
-            @ConfigProperty(name = "mailtrap.inbox-id") Long mailtrapInboxId) {
+            @ConfigProperty(name = "mailtrap.inbox-id") String mailtrapInboxIdStr) {
         this.mailtrapApiToken = mailtrapApiToken;
         this.adminEmail = adminEmail;
-        this.mailtrapInboxId = mailtrapInboxId;
+        // Converter String para Long manualmente para garantir que funciona
+        this.mailtrapInboxId = parseInboxId(mailtrapInboxIdStr);
+    }
+    
+    /**
+     * Converte a string do inbox ID para Long.
+     * Retorna null se não estiver configurado ou inválido.
+     */
+    private Long parseInboxId(String inboxIdStr) {
+        if (inboxIdStr == null || inboxIdStr.isBlank()) {
+            return null;
+        }
+        try {
+            return Long.parseLong(inboxIdStr.trim());
+        } catch (NumberFormatException e) {
+            logger.warn("⚠ Valor inválido para MAILTRAP_INBOX_ID: '{}'. Deve ser um número.", inboxIdStr);
+            return null;
+        }
     }
 
     @PostConstruct
