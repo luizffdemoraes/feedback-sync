@@ -45,7 +45,7 @@ class NotifyAdminFunctionTest {
     private String feedbackJson;
 
     @BeforeEach
-    void setUp() throws Exception {
+    void setUp() {
         feedback = new Feedback("Aula muito ruim", new Score(2), Urgency.HIGH);
         feedback.setId("test-id-123");
         
