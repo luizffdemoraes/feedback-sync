@@ -12,7 +12,8 @@ import org.slf4j.LoggerFactory;
 /**
  * Azure Function que gera relatório semanal de feedbacks automaticamente.
  * 
- * Executa toda segunda-feira às 08:00 (configurável via cron expression).
+ * Executa conforme agendamento configurado via variável de ambiente REPORT_SCHEDULE_CRON.
+ * Por padrão, executa a cada 5 minutos em ambiente local (para testes).
  * 
  * Responsabilidade única: Agendar e disparar a geração de relatórios semanais
  */
@@ -32,7 +33,7 @@ public class WeeklyReportFunction {
     public void run(
             @TimerTrigger(
                     name = "timerInfo",
-                    schedule = "0 0 8 * * MON"  // Toda segunda-feira às 08:00
+                    schedule = "%REPORT_SCHEDULE_CRON%"  // Configurado via variável de ambiente (application.properties/local.settings.json)
             ) String timerInfo,
             final ExecutionContext context) {
 

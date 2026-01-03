@@ -19,7 +19,8 @@
     "azure.table.table-name": "feedbacks",
 
     "APP_ENVIRONMENT": "local",
-    "APP_DEBUG": "true"
+    "APP_DEBUG": "true",
+    "REPORT_SCHEDULE_CRON": "0 */5 * * * *"
   },
   "Host": {
     "LocalHttpPort": 7071,

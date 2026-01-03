@@ -2,7 +2,7 @@
 	"info": {
 		"_postman_id": "feedback-sync-collection",
 		"name": "Feedback Sync - Tech Challenge 4ª Fase",
-		"description": "Collection completa para testar a API do sistema de feedback serverless.\n\n**Endpoints disponíveis:**\n- POST /avaliacao - Criar feedback de avaliação\n- POST /relatorio - Gerar relatório semanal\n- GET /health - Health check da aplicação\n\n**Ambientes:**\n- Local: http://localhost:7071\n- Azure: {{azure_url}}",
+		"description": "Collection completa para testar a API do sistema de feedback serverless.\n\n**Endpoints disponíveis:**\n- POST /avaliacao - Criar feedback de avaliação\n- GET /health - Health check da aplicação\n\n**Ambientes:**\n- Local: http://localhost:7071\n- Azure: {{azure_url}}\n\n**Nota:** O relatório semanal é gerado automaticamente via Timer Trigger (WeeklyReportFunction), não há endpoint REST para geração manual.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"item": [
@@ -366,77 +366,6 @@
 				}
 			],
 			"description": "Endpoints para criação e gerenciamento de feedbacks de avaliação"
-		},
-		{
-			"name": "Relatórios",
-			"item": [
-				{
-					"name": "Gerar Relatório Semanal",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test(\"Status code is 200\", function () {",
-									"    pm.response.to.have.status(200);",
-									"});",
-									"",
-									"pm.test(\"Response has report data\", function () {",
-									"    var jsonData = pm.response.json();",
-									"    pm.expect(jsonData).to.have.property('periodo_inicio');",
-									"    pm.expect(jsonData).to.have.property('periodo_fim');",
-									"    pm.expect(jsonData).to.have.property('total_avaliacoes');",
-									"    pm.expect(jsonData).to.have.property('media_avaliacoes');",
-									"    pm.expect(jsonData).to.have.property('avaliacoes_por_dia');",
-									"    pm.expect(jsonData).to.have.property('avaliacoes_por_urgencia');",
-									"    pm.expect(jsonData).to.have.property('report_url');",
-									"});",
-									"",
-									"pm.test(\"Total de avaliações is a number\", function () {",
-									"    var jsonData = pm.response.json();",
-									"    pm.expect(jsonData.total_avaliacoes).to.be.a('number');",
-									"});",
-									"",
-									"pm.test(\"Média de avaliações is a number\", function () {",
-									"    var jsonData = pm.response.json();",
-									"    pm.expect(jsonData.media_avaliacoes).to.be.a('number');",
-									"});",
-									"",
-									"pm.test(\"Response time is less than 10000ms\", function () {",
-									"    pm.expect(pm.response.responseTime).to.be.below(10000);",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": ""
-						},
-						"url": {
-							"raw": "{{base_url}}/relatorio",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"relatorio"
-							]
-						},
-						"description": "Gera um relatório semanal consolidado de todos os feedbacks da semana atual (segunda-feira até hoje).\n\nO relatório inclui:\n- Período (início e fim)\n- Total de avaliações\n- Média de avaliações\n- Quantidade de avaliações por dia\n- Quantidade de avaliações por urgência\n- URL do arquivo JSON salvo no Blob Storage\n\n**Nota:** Este endpoint força a geração manual do relatório. O relatório também é gerado automaticamente toda segunda-feira às 08:00 via Timer Trigger (WeeklyReportFunction)."
-					},
-					"response": []
-				}
-			],
-			"description": "Endpoints para geração e consulta de relatórios semanais"
 		}
 	],
 	"variable": [

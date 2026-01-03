@@ -149,7 +149,8 @@ $appSettings = @(
     "quarkus.log.level=INFO",
     "app.environment=production",
     "azure.storage.container-name=weekly-reports",
-    "azure.table.table-name=feedbacks"
+    "azure.table.table-name=feedbacks",
+    "REPORT_SCHEDULE_CRON=0 */5 * * * *"
 )
 
 # Adicionar configurações do Mailtrap se fornecidas

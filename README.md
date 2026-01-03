@@ -62,32 +62,6 @@ O sistema foi desenvolvido seguindo os princípios de **Clean Architecture** e *
 }
 ```
 
-### 📊 Report Service
-
-| Operação | Descrição | Acesso |
-|----------|-----------|--------|
-| `POST /relatorio` | Gera relatório semanal manualmente | Administrador |
-
-**Resposta:**
-```json
-{
-  "periodo_inicio": "2024-01-15T00:00:00Z",
-  "periodo_fim": "2024-01-21T23:59:59Z",
-  "total_avaliacoes": 150,
-  "media_avaliacoes": 7.5,
-  "avaliacoes_por_dia": {
-    "2024-01-15": 20,
-    "2024-01-16": 25
-  },
-  "avaliacoes_por_urgencia": {
-    "LOW": 100,
-    "MEDIUM": 40,
-    "HIGH": 10
-  },
-  "report_url": "https://storage.blob.core.windows.net/weekly-reports/relatorios/..."
-}
-```
-
 ---
 
 ## ⚡ Azure Functions Serverless
@@ -120,15 +94,18 @@ O sistema implementa **duas funções serverless** seguindo o princípio de **Re
 **Responsabilidade**: Gerar relatórios semanais automaticamente
 
 **Fluxo:**
-1. Dispara automaticamente toda segunda-feira às 08:00 (CRON: `0 0 8 * * MON`)
-2. Busca todos os feedbacks da semana anterior
+1. Dispara automaticamente conforme agendamento configurado (padrão: a cada 5 minutos)
+2. Busca todos os feedbacks da semana atual (segunda-feira até hoje)
 3. Calcula métricas (total, média, por dia, por urgência)
 4. Gera arquivo JSON e salva no Azure Blob Storage
 5. Retorna URL de acesso ao relatório
 
 **Configuração:**
-- **Schedule**: `0 0 8 * * MON` (Toda segunda às 08:00)
+- **Schedule**: Configurável via variável de ambiente `REPORT_SCHEDULE_CRON`
+  - **Padrão**: `0 */5 * * * *` (A cada 5 minutos - para facilitar visualização de resultados)
+  - **Produção semanal**: `0 0 8 * * MON` (Toda segunda às 08:00 - opcional)
 - **Storage**: Azure Blob Storage (container: `weekly-reports`)
+- **Período do Relatório**: Sempre semanal (segunda-feira até hoje), independente da frequência de geração
 
 **Dados do Relatório:**
 - Período (início e fim)
@@ -203,7 +180,6 @@ feedback-sync/
 │   │   │           │   └── JacksonConfig.java
 │   │   │           ├── controllers/
 │   │   │           │   ├── FeedbackController.java
-│   │   │           │   └── ReportController.java
 │   │   │           ├── handlers/         # Azure Functions
 │   │   │           │   ├── NotifyAdminFunction.java
 │   │   │           │   ├── WeeklyReportFunction.java
@@ -260,7 +236,7 @@ O projeto segue os princípios da **Clean Architecture**, garantindo:
 * **DTOs**: Requests e Responses
 
 #### 3. **Infrastructure** (Implementações)
-* **Controllers**: Endpoints REST (`FeedbackController`, `ReportController`)
+* **Controllers**: Endpoints REST (`FeedbackController`)
 * **Handlers**: Azure Functions (`NotifyAdminFunction`, `WeeklyReportFunction`)
 * **Gateways**: Implementações concretas (Table Storage, Queue Storage, Mailtrap, Blob Storage)
 * **Config**: Configurações (Exception Mapper, Jackson)
@@ -300,7 +276,6 @@ graph TB
         
         subgraph "REST Endpoints"
             FeedbackCtrl[📝 FeedbackController<br/>POST /avaliacao]
-            ReportCtrl[📊 ReportController<br/>POST /relatorio]
         end
         
         subgraph "Azure Functions"
@@ -340,9 +315,6 @@ graph TB
     WeeklyFunc -->|Timer CRON| ReportUC
     ReportUC -->|Buscar| TableStorage
     ReportUC -->|Salvar| BlobStorage
-    
-    Admin -->|POST /relatorio| ReportCtrl
-    ReportCtrl --> ReportUC
     
     FuncApp -.->|Logs| AppInsights
     NotifyFunc -.->|Logs| AppInsights
@@ -436,7 +408,7 @@ sequenceDiagram
     participant ReportStorageGateway
     participant BlobStorage
 
-    Note over Timer: CRON: 0 0 8 * * MON<br/>Toda segunda às 08:00
+    Note over Timer: CRON: 0 */5 * * * *<br/>A cada 5 minutos (configurável)
     
     Timer->>WeeklyReportFunction: Trigger Timer
     
@@ -466,7 +438,7 @@ sequenceDiagram
 ```mermaid
 graph TB
     subgraph "Infrastructure Layer"
-        Controllers[Controllers<br/>FeedbackController<br/>ReportController]
+        Controllers[Controllers<br/>FeedbackController]
         Handlers[Azure Functions<br/>NotifyAdminFunction<br/>WeeklyReportFunction]
         GatewaysImpl[Gateways Implementations<br/>TableStorageFeedbackGatewayImpl<br/>QueueNotificationGatewayImpl<br/>EmailNotificationGatewayImpl<br/>BlobReportStorageGatewayImpl]
         Config[Config<br/>GlobalExceptionMapper<br/>JacksonConfig]
@@ -600,8 +572,6 @@ flowchart TD
     Fetch --> Calc[Calcular métricas<br/>média, total, por dia, urgência]
     Calc --> SaveReport[Salvar JSON<br/>no Blob Storage]
     SaveReport --> Return[Retornar URL<br/>do relatório]
-    
-    Manual[POST /relatorio] --> ReportUC
     
     style Start fill:#E3F2FD
     style Success1 fill:#C8E6C9
@@ -799,9 +769,8 @@ A aplicação estará disponível em: `http://localhost:7071`
   -ContentType "application/json"
 
 # Gerar relatório manualmente
-Invoke-RestMethod -Uri "http://localhost:7071/api/relatorio" `
-  -Method Post `
-     -ContentType "application/json"
+# Nota: O relatório semanal é gerado automaticamente via Timer Trigger (WeeklyReportFunction)
+# Não há endpoint REST para geração manual
    ```
 
 ### 5. Parar os Serviços
@@ -950,7 +919,6 @@ O projeto inclui uma collection completa do Postman para facilitar os testes da 
 |-------|----------|--------|-----------|
 | **Health Check** | `/health` | `GET` | Health check da aplicação |
 | **Feedback** | `/avaliacao` | `POST` | Criar feedback de avaliação (7 exemplos) |
-| **Relatórios** | `/relatorio` | `POST` | Gerar relatório semanal |
 
 ### 🧪 Testes Automatizados
 
@@ -983,32 +951,6 @@ Content-Type: application/json
 }
 ```
 
-#### Gerar Relatório
-
-```json
-POST /relatorio
-Content-Type: application/json
-```
-
-**Resposta:**
-```json
-{
-    "periodo_inicio": "2024-01-15T00:00:00Z",
-    "periodo_fim": "2024-01-21T23:59:59Z",
-    "total_avaliacoes": 150,
-    "media_avaliacoes": 7.5,
-    "avaliacoes_por_dia": {
-        "2024-01-15": 20,
-        "2024-01-16": 25
-    },
-    "avaliacoes_por_urgencia": {
-        "LOW": 100,
-        "MEDIUM": 40,
-        "HIGH": 10
-    },
-    "report_url": "https://storage.blob.core.windows.net/weekly-reports/..."
-}
-```
 
 ### 🔧 Variáveis de Ambiente
 
@@ -1088,6 +1030,48 @@ Content-Type: application/json
 | **Descrição Obrigatória** | Descrição não pode ser vazia | Validação no Use Case |
 | **Urgência Padrão** | Se não informada, assume LOW | `Urgency.of()` |
 | **Feedback Crítico** | Nota ≤ 3 dispara notificação | `Score.isCritical()` |
+
+---
+
+## 🎬 Configuração para Demonstração e Gravação de Vídeo
+
+Para fins didáticos e gravação de vídeo, você pode configurar o relatório para ser gerado com maior frequência:
+
+### Configurar CRON para Demonstração
+
+**No Azure (Cloud):**
+```powershell
+# A cada 5 minutos (recomendado para demonstração)
+az functionapp config appsettings set `
+    --name feedback-function-<seu-sufixo> `
+    --resource-group feedback-rg `
+    --settings "REPORT_SCHEDULE_CRON=0 */5 * * * *"
+```
+
+**Localmente (local.settings.json):**
+```json
+{
+  "Values": {
+    "REPORT_SCHEDULE_CRON": "0 */5 * * * *"
+  }
+}
+```
+
+### Opções de Agendamento
+
+| Frequência | CRON Expression | Uso |
+|------------|----------------|-----|
+| **A cada 5 minutos** (padrão) | `0 */5 * * * *` | Padrão configurado - facilita visualização de resultados |
+| **A cada 15 minutos** | `0 */15 * * * *` | Demonstração moderada |
+| **A cada hora** | `0 0 * * * *` | Testes prolongados |
+| **Semanal** | `0 0 8 * * MON` | Produção real (opcional - reduz custos) |
+
+**⚠️ Importante:**
+- O período do relatório continua sendo **semanal** (segunda até hoje)
+- Apenas a **frequência de geração** muda
+- **Padrão: a cada 5 minutos** para facilitar visualização durante desenvolvimento/demonstração
+- Para produção real, pode alterar para semanal para evitar custos desnecessários
+- Consulte **[GUIA_DEPLOY_AZURE.md](./GUIA_DEPLOY_AZURE.md)** para mais detalhes
 
 ---
 

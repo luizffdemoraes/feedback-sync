@@ -142,6 +142,20 @@ $env:ADMIN_EMAIL = "seu-email@exemplo.com"
 
 ## ⚙️ Configuração
 
+### ⏰ Agendamento do Relatório Semanal
+
+**Para demonstração e testes locais**, o relatório está configurado para ser gerado **a cada 5 minutos**.
+
+Isso está configurado em `src/main/resources/local.settings.json`:
+```json
+"REPORT_SCHEDULE_CRON": "0 */5 * * * *"
+```
+
+**Importante:**
+- ✅ **Localmente**: Executa a cada 5 minutos (ideal para demonstração em vídeo)
+- ⚠️ **No Azure**: Por padrão executa semanalmente (segunda-feira às 08:00)
+- 📝 O período do relatório sempre é semanal (segunda-feira até hoje), apenas a frequência de geração muda
+
 ### Variáveis de Ambiente
 
 Para que o envio de email funcione, configure:
@@ -226,12 +240,9 @@ Invoke-RestMethod -Uri "http://localhost:7071/avaliacao" `
   -ContentType "application/json"
 ```
 
-**Gerar relatório:**
-```powershell
-Invoke-RestMethod -Uri "http://localhost:7071/relatorio" `
-  -Method Post `
-  -ContentType "application/json"
-```
+**Nota:** O relatório semanal é gerado automaticamente via Timer Trigger (WeeklyReportFunction) **a cada 5 minutos** quando executado localmente (configurado em `local.settings.json`). Não há endpoint REST para geração manual.
+
+**⏰ Para demonstração:** O relatório será gerado automaticamente a cada 5 minutos. Você pode verificar os logs para ver quando o relatório foi gerado.
 
 ### Passo 4: Verificar Logs
 

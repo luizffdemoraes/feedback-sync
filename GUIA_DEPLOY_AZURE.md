@@ -238,6 +238,50 @@ az functionapp config appsettings set `
         "ADMIN_EMAIL=<admin@exemplo.com>"
 ```
 
+### 3. Configurar Agendamento do Relatório Semanal
+
+Por padrão, o relatório é gerado **a cada 5 minutos** (`0 */5 * * * *`) para facilitar a visualização de resultados.
+
+**Se desejar alterar o agendamento**, você pode configurar outras opções:
+
+#### Opção A: A cada 5 minutos (padrão - para demonstração rápida)
+```powershell
+az functionapp config appsettings set `
+    --name $functionAppName `
+    --resource-group $resourceGroup `
+    --settings "REPORT_SCHEDULE_CRON=0 */5 * * * *"
+```
+
+#### Opção B: A cada hora (para demonstração moderada)
+```powershell
+az functionapp config appsettings set `
+    --name $functionAppName `
+    --resource-group $resourceGroup `
+    --settings "REPORT_SCHEDULE_CRON=0 0 * * * *"
+```
+
+#### Opção C: A cada 15 minutos (balanceado)
+```powershell
+az functionapp config appsettings set `
+    --name $functionAppName `
+    --resource-group $resourceGroup `
+    --settings "REPORT_SCHEDULE_CRON=0 */15 * * * *"
+```
+
+#### Opção D: Voltar para semanal (produção)
+```powershell
+az functionapp config appsettings set `
+    --name $functionAppName `
+    --resource-group $resourceGroup `
+    --settings "REPORT_SCHEDULE_CRON=0 0 8 * * MON"
+```
+
+**⚠️ Importante:**
+- Após alterar o CRON, a Function App será reiniciada automaticamente
+- O período do relatório continua sendo semanal (segunda até hoje), apenas a frequência de geração muda
+- **Padrão configurado: a cada 5 minutos** para facilitar visualização de resultados
+- Se desejar produção real, pode alterar para semanal (`0 0 8 * * MON`) para evitar custos desnecessários
+
 #### Opção B: Re-executar o Script com Parâmetros do Mailtrap
 
 Você pode executar o script novamente apenas para atualizar as configurações do Mailtrap (os recursos já existentes não serão recriados):
