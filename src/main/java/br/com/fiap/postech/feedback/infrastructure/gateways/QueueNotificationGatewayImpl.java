@@ -5,6 +5,7 @@ import br.com.fiap.postech.feedback.domain.gateways.QueueNotificationGateway;
 import com.azure.core.exception.AzureException;
 import com.azure.storage.queue.QueueClient;
 import com.azure.storage.queue.QueueClientBuilder;
+import com.azure.storage.queue.QueueMessageEncoding;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
@@ -48,13 +49,19 @@ public class QueueNotificationGatewayImpl implements QueueNotificationGateway {
     @PostConstruct
     void init() {
         try {
+            // IMPORTANTE: Quando host.json tem messageEncoding="base64", o Azure Functions
+            // automaticamente codifica/decodifica as mensagens. Portanto, devemos usar
+            // QueueMessageEncoding.NONE para enviar texto puro (JSON), e o Azure Functions
+            // fará a conversão Base64 automaticamente.
+            // Se usarmos BASE64 aqui, teremos dupla codificação e a mensagem não será processada.
             queueClient = new QueueClientBuilder()
                     .connectionString(connectionString)
                     .queueName(QUEUE_NAME)
+                    .messageEncoding(QueueMessageEncoding.NONE)
                     .buildClient();
 
             queueClient.createIfNotExists();
-            logger.info("Azure Queue Storage inicializado. Fila: {}", QUEUE_NAME);
+            logger.info("Azure Queue Storage inicializado. Fila: {} (encoding: NONE - Azure Functions fará Base64)", QUEUE_NAME);
         } catch (AzureException e) {
             String errorMessage = String.format("Erro ao inicializar Azure Queue Storage. Fila: %s", QUEUE_NAME);
             throw new NotificationException(errorMessage, e);

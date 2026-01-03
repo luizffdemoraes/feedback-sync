@@ -21,7 +21,7 @@
   },
   "extensions": {
     "queues": {
-      "messageEncoding": "base64"
+      "messageEncoding": "none"
     }
   },
   "queues": {

@@ -5,15 +5,18 @@ import br.com.fiap.postech.feedback.domain.exceptions.NotificationException;
 import br.com.fiap.postech.feedback.domain.gateways.EmailNotificationGateway;
 import br.com.fiap.postech.feedback.domain.values.Score;
 import br.com.fiap.postech.feedback.domain.values.Urgency;
+import br.com.fiap.postech.feedback.infrastructure.config.FunctionProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.microsoft.azure.functions.ExecutionContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -31,8 +34,11 @@ class NotifyAdminFunctionTest {
 
     @Mock
     private ExecutionContext executionContext;
+    
+    @Mock
+    private Logger logger;
 
-    @InjectMocks
+    @Spy
     private NotifyAdminFunction notifyAdminFunction;
 
     private Feedback feedback;
@@ -44,6 +50,14 @@ class NotifyAdminFunctionTest {
         feedback.setId("test-id-123");
         
         feedbackJson = "{\"id\":\"test-id-123\",\"description\":\"Aula muito ruim\",\"score\":{\"value\":2},\"urgency\":{\"value\":\"HIGH\"}}";
+        
+        // Mocka o logger do ExecutionContext
+        when(executionContext.getLogger()).thenReturn(logger);
+        doNothing().when(logger).info(anyString());
+        
+        // Mocka os métodos package-private usando spy
+        doReturn(emailGateway).when(notifyAdminFunction).getEmailGateway();
+        doReturn(objectMapper).when(notifyAdminFunction).getObjectMapper();
     }
 
     @Test
@@ -59,18 +73,18 @@ class NotifyAdminFunctionTest {
     }
 
     @Test
-    @DisplayName("Deve lançar RuntimeException quando erro ao processar feedback")
+    @DisplayName("Deve lançar FunctionProcessingException quando erro ao processar feedback")
     void deveLancarRuntimeExceptionQuandoErroAoProcessarFeedback() throws Exception {
         RuntimeException runtimeException = new RuntimeException("Erro ao deserializar");
         
         when(objectMapper.readValue(anyString(), eq(Feedback.class))).thenThrow(runtimeException);
 
-        RuntimeException exception = assertThrows(
-            RuntimeException.class,
+        FunctionProcessingException exception = assertThrows(
+            FunctionProcessingException.class,
             () -> notifyAdminFunction.run(feedbackJson, executionContext)
         );
 
-        assertEquals("Falha ao processar notificação crítica", exception.getMessage());
+        assertTrue(exception.getMessage().contains("Falha ao processar notificação crítica"));
         assertEquals(runtimeException, exception.getCause());
     }
 
@@ -92,19 +106,19 @@ class NotifyAdminFunctionTest {
     }
 
     @Test
-    @DisplayName("Deve lançar RuntimeException quando erro ao enviar email para feedback")
+    @DisplayName("Deve lançar FunctionProcessingException quando erro ao enviar email para feedback")
     void deveLancarRuntimeExceptionQuandoErroAoEnviarEmailParaFeedback() throws Exception {
         NotificationException notificationException = new NotificationException("Erro ao enviar email");
         
         when(objectMapper.readValue(anyString(), eq(Feedback.class))).thenReturn(feedback);
         doThrow(notificationException).when(emailGateway).sendAdminNotification(anyString());
 
-        RuntimeException exception = assertThrows(
-            RuntimeException.class,
+        FunctionProcessingException exception = assertThrows(
+            FunctionProcessingException.class,
             () -> notifyAdminFunction.run(feedbackJson, executionContext)
         );
 
-        assertEquals("Falha ao processar notificação crítica", exception.getMessage());
+        assertTrue(exception.getMessage().contains("Falha ao processar notificação crítica"));
         assertEquals(notificationException, exception.getCause());
     }
 }
