@@ -2,370 +2,842 @@
 	"info": {
 		"_postman_id": "feedback-sync-collection",
 		"name": "Feedback Sync - Tech Challenge 4ª Fase",
-		"description": "Collection completa para testar a API do sistema de feedback serverless.\n\n**Endpoints disponíveis:**\n- POST /avaliacao - Criar feedback de avaliação\n- GET /health - Health check da aplicação\n\n**Ambientes:**\n- Local: http://localhost:7071\n- Azure: {{azure_url}}\n\n**Nota:** O relatório semanal é gerado automaticamente via Timer Trigger (WeeklyReportFunction), não há endpoint REST para geração manual.",
+		"description": "Collection completa para testar a API do sistema de feedback serverless.\n\n## 📋 Endpoints Disponíveis\n\n### POST /avaliacao\nRecebe feedback de avaliação de aula.\n\n**Campos da Requisição:**\n- `descricao` (string, obrigatório): Descrição do feedback\n- `nota` (integer, obrigatório): Nota de 0 a 10\n- `urgencia` (string, opcional): Nível de urgência - valores válidos: `LOW`, `MEDIUM`, `HIGH`. Se não informado, assume `LOW`\n\n**Resposta de Sucesso (201 Created):**\n```json\n{\n  \"id\": \"uuid-do-feedback\",\n  \"status\": \"recebido\"\n}\n```\n\n**Regras de Negócio:**\n- Feedbacks com nota ≤ 3 são considerados críticos e disparam notificação automática para administradores\n- A notificação é processada assincronamente via Azure Queue Storage\n- Todos os feedbacks são persistidos no Azure Table Storage\n\n**Códigos de Status:**\n- `201 Created`: Feedback criado com sucesso\n- `400 Bad Request`: Erro de validação (campos obrigatórios ausentes, nota inválida, urgência inválida)\n- `500 Internal Server Error`: Erro interno do servidor\n\n### GET /health\nVerifica o status de saúde da aplicação.\n\n**Resposta de Sucesso (200 OK):**\nRetorna informações sobre o estado do sistema (via Quarkus SmallRye Health).\n\n**Estrutura:**\n- **Local**: Pasta com requisições para ambiente local (http://localhost:7071)\n- **Cloud**: Pasta com requisições para ambiente Azure (https://feedback-function-prod.azurewebsites.net)\n\n**Nota:** O relatório semanal é gerado automaticamente via Timer Trigger (WeeklyReportFunction), não há endpoint REST para geração manual.\n\n**Importante:** No Azure Functions, os endpoints REST usam o prefixo /api automaticamente.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"item": [
 		{
-			"name": "Health Check",
+			"name": "Local",
 			"item": [
 				{
-					"name": "Health Check - Verificar Status",
-					"event": [
+					"name": "Health Check",
+					"item": [
 						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test(\"Status code is 200\", function () {",
-									"    pm.response.to.have.status(200);",
-									"});",
-									"",
-									"pm.test(\"Response time is less than 2000ms\", function () {",
-									"    pm.expect(pm.response.responseTime).to.be.below(2000);",
-									"});"
-								],
-								"type": "text/javascript"
-							}
+							"name": "GET /health - Verificar Status",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"pm.test(\"Status code is 200\", function () {",
+											"    pm.response.to.have.status(200);",
+											"});",
+											"",
+											"pm.test(\"Response time is less than 2000ms\", function () {",
+											"    pm.expect(pm.response.responseTime).to.be.below(2000);",
+											"});",
+											"",
+											"pm.test(\"Response has health status\", function () {",
+											"    var jsonData = pm.response.json();",
+											"    pm.expect(jsonData).to.be.an('object');",
+											"});"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{local_base_url}}/health",
+									"host": [
+										"{{local_base_url}}"
+									],
+									"path": [
+										"health"
+									]
+								},
+								"description": "**GET /health**\n\nVerifica o status de saúde da aplicação no ambiente local.\n\n**Endpoint:** `GET {{local_base_url}}/health`\n\n**Resposta de Sucesso (200 OK):**\nRetorna informações sobre o estado do sistema via Quarkus SmallRye Health.\n\n**Códigos de Status:**\n- `200 OK`: Sistema saudável\n- `503 Service Unavailable`: Sistema com problemas"
+							},
+							"response": []
 						}
 					],
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/health",
-							"host": [
-								"{{base_url}}"
+					"description": "**Health Check Endpoints**\n\nEndpoints para verificação de saúde da aplicação - Ambiente Local.\n\n### GET /health\nVerifica o status de saúde da aplicação."
+				},
+				{
+					"name": "Feedback",
+					"item": [
+						{
+							"name": "POST /avaliacao - Criar Feedback Crítico (Nota ≤ 3)",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"pm.test(\"Status code is 201\", function () {",
+											"    pm.response.to.have.status(201);",
+											"});",
+											"",
+											"pm.test(\"Response has id and status\", function () {",
+											"    var jsonData = pm.response.json();",
+											"    pm.expect(jsonData).to.have.property('id');",
+											"    pm.expect(jsonData).to.have.property('status');",
+											"    pm.expect(jsonData.status).to.eql('recebido');",
+											"});",
+											"",
+											"pm.test(\"Response time is less than 3000ms\", function () {",
+											"    pm.expect(pm.response.responseTime).to.be.below(3000);",
+											"});"
+										],
+										"type": "text/javascript"
+									}
+								}
 							],
-							"path": [
-								"health"
-							]
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"descricao\": \"Aula muito confusa, não consegui entender o conteúdo. Preciso de ajuda urgente!\",\n    \"nota\": 2,\n    \"urgencia\": \"HIGH\"\n}"
+								},
+								"url": {
+									"raw": "{{local_base_url}}/avaliacao",
+									"host": [
+										"{{local_base_url}}"
+									],
+									"path": [
+										"avaliacao"
+									]
+								},
+								"description": "**POST /avaliacao**\n\nCria um feedback crítico (nota ≤ 3) no ambiente local.\n\n**Endpoint:** `POST {{local_base_url}}/avaliacao`\n\n**Campos:**\n- `descricao` (obrigatório): Descrição do feedback\n- `nota` (obrigatório): Nota de 0 a 10 (neste caso: 2)\n- `urgencia` (opcional): `HIGH`\n\n**Regra de Negócio:**\nFeedbacks com nota ≤ 3 são considerados críticos e disparam notificação automática para administradores via Azure Queue Storage.\n\n**Resposta de Sucesso (201 Created):**\n```json\n{\n  \"id\": \"uuid-do-feedback\",\n  \"status\": \"recebido\"\n}\n```"
+							},
+							"response": []
 						},
-						"description": "Verifica o status de saúde da aplicação. Retorna informações sobre o estado do sistema."
-					},
-					"response": []
+						{
+							"name": "POST /avaliacao - Criar Feedback Normal (Nota Média)",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"pm.test(\"Status code is 201\", function () {",
+											"    pm.response.to.have.status(201);",
+											"});",
+											"",
+											"pm.test(\"Response has id and status\", function () {",
+											"    var jsonData = pm.response.json();",
+											"    pm.expect(jsonData).to.have.property('id');",
+											"    pm.expect(jsonData).to.have.property('status');",
+											"});"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"descricao\": \"Aula boa, conteúdo interessante mas poderia ter mais exemplos práticos.\",\n    \"nota\": 7,\n    \"urgencia\": \"MEDIUM\"\n}"
+								},
+								"url": {
+									"raw": "{{local_base_url}}/avaliacao",
+									"host": [
+										"{{local_base_url}}"
+									],
+									"path": [
+										"avaliacao"
+									]
+								},
+								"description": "**POST /avaliacao**\n\nCria um feedback com nota média no ambiente local.\n\n**Endpoint:** `POST {{local_base_url}}/avaliacao`\n\n**Campos:**\n- `descricao` (obrigatório): Descrição do feedback\n- `nota` (obrigatório): Nota de 0 a 10 (neste caso: 7)\n- `urgencia` (opcional): `MEDIUM`\n\n**Resposta de Sucesso (201 Created):**\n```json\n{\n  \"id\": \"uuid-do-feedback\",\n  \"status\": \"recebido\"\n}\n```"
+							},
+							"response": []
+						},
+						{
+							"name": "POST /avaliacao - Criar Feedback Excelente (Nota Alta)",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"pm.test(\"Status code is 201\", function () {",
+											"    pm.response.to.have.status(201);",
+											"});",
+											"",
+											"pm.test(\"Response has id and status\", function () {",
+											"    var jsonData = pm.response.json();",
+											"    pm.expect(jsonData).to.have.property('id');",
+											"    pm.expect(jsonData).to.have.property('status');",
+											"});"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"descricao\": \"Aula excelente! Professor muito didático, conteúdo bem explicado e exemplos práticos muito úteis.\",\n    \"nota\": 10,\n    \"urgencia\": \"LOW\"\n}"
+								},
+								"url": {
+									"raw": "{{local_base_url}}/avaliacao",
+									"host": [
+										"{{local_base_url}}"
+									],
+									"path": [
+										"avaliacao"
+									]
+								},
+								"description": "**POST /avaliacao**\n\nCria um feedback com nota alta no ambiente local.\n\n**Endpoint:** `POST {{local_base_url}}/avaliacao`\n\n**Campos:**\n- `descricao` (obrigatório): Descrição do feedback\n- `nota` (obrigatório): Nota de 0 a 10 (neste caso: 10)\n- `urgencia` (opcional): `LOW`\n\n**Resposta de Sucesso (201 Created):**\n```json\n{\n  \"id\": \"uuid-do-feedback\",\n  \"status\": \"recebido\"\n}\n```"
+							},
+							"response": []
+						},
+						{
+							"name": "POST /avaliacao - Criar Feedback Sem Urgência (Padrão LOW)",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"pm.test(\"Status code is 201\", function () {",
+											"    pm.response.to.have.status(201);",
+											"});",
+											"",
+											"pm.test(\"Response has id and status\", function () {",
+											"    var jsonData = pm.response.json();",
+											"    pm.expect(jsonData).to.have.property('id');",
+											"    pm.expect(jsonData).to.have.property('status');",
+											"});"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"descricao\": \"Aula razoável, conteúdo básico mas útil.\",\n    \"nota\": 6\n}"
+								},
+								"url": {
+									"raw": "{{local_base_url}}/avaliacao",
+									"host": [
+										"{{local_base_url}}"
+									],
+									"path": [
+										"avaliacao"
+									]
+								},
+								"description": "**POST /avaliacao**\n\nCria um feedback sem especificar urgência no ambiente local. O sistema assume `LOW` como padrão.\n\n**Endpoint:** `POST {{local_base_url}}/avaliacao`\n\n**Campos:**\n- `descricao` (obrigatório): Descrição do feedback\n- `nota` (obrigatório): Nota de 0 a 10 (neste caso: 6)\n- `urgencia` (opcional): Não informado - assume `LOW` automaticamente\n\n**Resposta de Sucesso (201 Created):**\n```json\n{\n  \"id\": \"uuid-do-feedback\",\n  \"status\": \"recebido\"\n}\n```"
+							},
+							"response": []
+						},
+						{
+							"name": "POST /avaliacao - Erro: Sem Descrição (400)",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"pm.test(\"Status code is 400\", function () {",
+											"    pm.response.to.have.status(400);",
+											"});",
+											"",
+											"pm.test(\"Response has error message\", function () {",
+											"    var jsonData = pm.response.json();",
+											"    pm.expect(jsonData).to.have.property('error');",
+											"});"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"nota\": 8\n}"
+								},
+								"url": {
+									"raw": "{{local_base_url}}/avaliacao",
+									"host": [
+										"{{local_base_url}}"
+									],
+									"path": [
+										"avaliacao"
+									]
+								},
+								"description": "**POST /avaliacao**\n\nTesta validação de campos obrigatórios no ambiente local.\n\n**Endpoint:** `POST {{local_base_url}}/avaliacao`\n\n**Erro Esperado:**\n- Status: `400 Bad Request`\n- Motivo: Campo `descricao` é obrigatório\n\n**Resposta de Erro (400 Bad Request):**\n```json\n{\n  \"error\": \"Descrição é obrigatória\"\n}\n```"
+							},
+							"response": []
+						},
+						{
+							"name": "POST /avaliacao - Erro: Sem Nota (400)",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"pm.test(\"Status code is 400\", function () {",
+											"    pm.response.to.have.status(400);",
+											"});"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"descricao\": \"Aula interessante\"\n}"
+								},
+								"url": {
+									"raw": "{{local_base_url}}/avaliacao",
+									"host": [
+										"{{local_base_url}}"
+									],
+									"path": [
+										"avaliacao"
+									]
+								},
+								"description": "**POST /avaliacao**\n\nTesta validação de campos obrigatórios no ambiente local.\n\n**Endpoint:** `POST {{local_base_url}}/avaliacao`\n\n**Erro Esperado:**\n- Status: `400 Bad Request`\n- Motivo: Campo `nota` é obrigatório\n\n**Resposta de Erro (400 Bad Request):**\n```json\n{\n  \"error\": \"Nota é obrigatória\"\n}\n```"
+							},
+							"response": []
+						},
+						{
+							"name": "POST /avaliacao - Erro: Nota Inválida (400)",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"pm.test(\"Status code is 400\", function () {",
+											"    pm.response.to.have.status(400);",
+											"});"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"descricao\": \"Teste de nota inválida\",\n    \"nota\": 15\n}"
+								},
+								"url": {
+									"raw": "{{local_base_url}}/avaliacao",
+									"host": [
+										"{{local_base_url}}"
+									],
+									"path": [
+										"avaliacao"
+									]
+								},
+								"description": "**POST /avaliacao**\n\nTesta validação de nota no ambiente local.\n\n**Endpoint:** `POST {{local_base_url}}/avaliacao`\n\n**Erro Esperado:**\n- Status: `400 Bad Request`\n- Motivo: Nota deve estar entre 0 e 10\n\n**Resposta de Erro (400 Bad Request):**\n```json\n{\n  \"error\": \"Nota deve estar entre 0 e 10\"\n}\n```"
+							},
+							"response": []
+						},
+						{
+							"name": "POST /avaliacao - Erro: Urgência Inválida (400)",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"pm.test(\"Status code is 400\", function () {",
+											"    pm.response.to.have.status(400);",
+											"});"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"descricao\": \"Teste de urgência inválida\",\n    \"nota\": 5,\n    \"urgencia\": \"INVALID\"\n}"
+								},
+								"url": {
+									"raw": "{{local_base_url}}/avaliacao",
+									"host": [
+										"{{local_base_url}}"
+									],
+									"path": [
+										"avaliacao"
+									]
+								},
+								"description": "**POST /avaliacao**\n\nTesta validação de urgência no ambiente local.\n\n**Endpoint:** `POST {{local_base_url}}/avaliacao`\n\n**Erro Esperado:**\n- Status: `400 Bad Request`\n- Motivo: Urgência deve ser `LOW`, `MEDIUM` ou `HIGH`\n\n**Resposta de Erro (400 Bad Request):**\n```json\n{\n  \"error\": \"Urgency must be LOW, MEDIUM or HIGH, but was INVALID\"\n}\n```"
+							},
+							"response": []
+						}
+					],
+					"description": "**Feedback Endpoints**\n\nEndpoints para criação e gerenciamento de feedbacks - Ambiente Local.\n\n### POST /avaliacao\nRecebe feedback de avaliação de aula.\n\n**Campos da Requisição:**\n- `descricao` (string, **obrigatório**): Descrição do feedback\n- `nota` (integer, **obrigatório**): Nota de 0 a 10\n- `urgencia` (string, **opcional**): Nível de urgência - valores válidos: `LOW`, `MEDIUM`, `HIGH`. Se não informado, assume `LOW`\n\n**Resposta de Sucesso (201 Created):**\n```json\n{\n  \"id\": \"uuid-do-feedback\",\n  \"status\": \"recebido\"\n}\n```\n\n**Regras de Negócio:**\n- Feedbacks com nota ≤ 3 são considerados críticos e disparam notificação automática para administradores\n- A notificação é processada assincronamente via Azure Queue Storage\n- Todos os feedbacks são persistidos no Azure Table Storage\n\n**Códigos de Status:**\n- `201 Created`: Feedback criado com sucesso\n- `400 Bad Request`: Erro de validação (campos obrigatórios ausentes, nota inválida, urgência inválida)\n- `500 Internal Server Error`: Erro interno do servidor"
 				}
 			],
-			"description": "Endpoints para verificação de saúde da aplicação"
+			"description": "**Ambiente Local**\n\nRequisições para ambiente local (http://localhost:7071).\n\n**Endpoints disponíveis:**\n- `GET /health` - Health check\n- `POST /avaliacao` - Criar feedback"
 		},
 		{
-			"name": "Feedback",
+			"name": "Cloud",
 			"item": [
 				{
-					"name": "Criar Feedback - Crítico (Nota Baixa)",
-					"event": [
+					"name": "Health Check",
+					"item": [
 						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test(\"Status code is 201\", function () {",
-									"    pm.response.to.have.status(201);",
-									"});",
-									"",
-									"pm.test(\"Response has id and status\", function () {",
-									"    var jsonData = pm.response.json();",
-									"    pm.expect(jsonData).to.have.property('id');",
-									"    pm.expect(jsonData).to.have.property('status');",
-									"    pm.expect(jsonData.status).to.eql('recebido');",
-									"});",
-									"",
-									"pm.test(\"Response time is less than 3000ms\", function () {",
-									"    pm.expect(pm.response.responseTime).to.be.below(3000);",
-									"});"
-								],
-								"type": "text/javascript"
-							}
+							"name": "GET /health - Verificar Status",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"pm.test(\"Status code is 200\", function () {",
+											"    pm.response.to.have.status(200);",
+											"});",
+											"",
+											"pm.test(\"Response time is less than 2000ms\", function () {",
+											"    pm.expect(pm.response.responseTime).to.be.below(2000);",
+											"});",
+											"",
+											"pm.test(\"Response has health status\", function () {",
+											"    var jsonData = pm.response.json();",
+											"    pm.expect(jsonData).to.be.an('object');",
+											"});"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{cloud_base_url}}/api/health",
+									"host": [
+										"{{cloud_base_url}}"
+									],
+									"path": [
+										"api",
+										"health"
+									]
+								},
+								"description": "**GET /api/health**\n\nVerifica o status de saúde da aplicação no Azure Functions.\n\n**Endpoint:** `GET {{cloud_base_url}}/api/health`\n\n**Nota:** No Azure Functions, os endpoints REST usam o prefixo `/api` automaticamente.\n\n**Resposta de Sucesso (200 OK):**\nRetorna informações sobre o estado do sistema via Quarkus SmallRye Health.\n\n**Códigos de Status:**\n- `200 OK`: Sistema saudável\n- `503 Service Unavailable`: Sistema com problemas"
+							},
+							"response": []
 						}
 					],
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"descricao\": \"Aula muito confusa, não consegui entender o conteúdo. Preciso de ajuda urgente!\",\n    \"nota\": 2,\n    \"urgencia\": \"HIGH\"\n}"
-						},
-						"url": {
-							"raw": "{{base_url}}/avaliacao",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"avaliacao"
-							]
-						},
-						"description": "Cria um feedback crítico (nota ≤ 3). Este feedback será automaticamente enviado para o Service Bus e processado pela função NotifyAdminFunction para notificar os administradores."
-					},
-					"response": []
+					"description": "**Health Check Endpoints**\n\nEndpoints para verificação de saúde da aplicação - Ambiente Cloud (Azure).\n\n### GET /api/health\nVerifica o status de saúde da aplicação.\n\n**Nota:** No Azure Functions, os endpoints REST usam o prefixo `/api` automaticamente."
 				},
 				{
-					"name": "Criar Feedback - Normal (Nota Média)",
-					"event": [
+					"name": "Feedback",
+					"item": [
 						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test(\"Status code is 201\", function () {",
-									"    pm.response.to.have.status(201);",
-									"});",
-									"",
-									"pm.test(\"Response has id and status\", function () {",
-									"    var jsonData = pm.response.json();",
-									"    pm.expect(jsonData).to.have.property('id');",
-									"    pm.expect(jsonData).to.have.property('status');",
-									"});"
+							"name": "POST /avaliacao - Criar Feedback Crítico (Nota ≤ 3)",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"pm.test(\"Status code is 201\", function () {",
+											"    pm.response.to.have.status(201);",
+											"});",
+											"",
+											"pm.test(\"Response has id and status\", function () {",
+											"    var jsonData = pm.response.json();",
+											"    pm.expect(jsonData).to.have.property('id');",
+											"    pm.expect(jsonData).to.have.property('status');",
+											"    pm.expect(jsonData.status).to.eql('recebido');",
+											"});",
+											"",
+											"pm.test(\"Response time is less than 5000ms\", function () {",
+											"    pm.expect(pm.response.responseTime).to.be.below(5000);",
+											"});"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
 								],
-								"type": "text/javascript"
-							}
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"descricao\": \"Aula muito confusa, não consegui entender o conteúdo. Preciso de ajuda urgente!\",\n    \"nota\": 2,\n    \"urgencia\": \"HIGH\"\n}"
+								},
+								"url": {
+									"raw": "{{cloud_base_url}}/api/avaliacao",
+									"host": [
+										"{{cloud_base_url}}"
+									],
+									"path": [
+										"api",
+										"avaliacao"
+									]
+								},
+								"description": "**POST /api/avaliacao**\n\nCria um feedback crítico (nota ≤ 3) no Azure Functions. Este feedback será automaticamente enviado para a fila e processado pela função NotifyAdminFunction.\n\n**Endpoint:** `POST {{cloud_base_url}}/api/avaliacao`\n\n**Nota:** No Azure Functions, os endpoints REST usam o prefixo `/api` automaticamente.\n\n**Campos:**\n- `descricao` (obrigatório): Descrição do feedback\n- `nota` (obrigatório): Nota de 0 a 10 (neste caso: 2)\n- `urgencia` (opcional): `HIGH`\n\n**Regra de Negócio:**\nFeedbacks com nota ≤ 3 são considerados críticos e disparam notificação automática para administradores via Azure Queue Storage.\n\n**Resposta de Sucesso (201 Created):**\n```json\n{\n  \"id\": \"uuid-do-feedback\",\n  \"status\": \"recebido\"\n}\n```"
+							},
+							"response": []
+						},
+						{
+							"name": "POST /avaliacao - Criar Feedback Normal (Nota Média)",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"pm.test(\"Status code is 201\", function () {",
+											"    pm.response.to.have.status(201);",
+											"});",
+											"",
+											"pm.test(\"Response has id and status\", function () {",
+											"    var jsonData = pm.response.json();",
+											"    pm.expect(jsonData).to.have.property('id');",
+											"    pm.expect(jsonData).to.have.property('status');",
+											"});"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"descricao\": \"Aula boa, conteúdo interessante mas poderia ter mais exemplos práticos.\",\n    \"nota\": 7,\n    \"urgencia\": \"MEDIUM\"\n}"
+								},
+								"url": {
+									"raw": "{{cloud_base_url}}/api/avaliacao",
+									"host": [
+										"{{cloud_base_url}}"
+									],
+									"path": [
+										"api",
+										"avaliacao"
+									]
+								},
+								"description": "**POST /api/avaliacao**\n\nCria um feedback com nota média no Azure Functions.\n\n**Endpoint:** `POST {{cloud_base_url}}/api/avaliacao`\n\n**Campos:**\n- `descricao` (obrigatório): Descrição do feedback\n- `nota` (obrigatório): Nota de 0 a 10 (neste caso: 7)\n- `urgencia` (opcional): `MEDIUM`\n\n**Resposta de Sucesso (201 Created):**\n```json\n{\n  \"id\": \"uuid-do-feedback\",\n  \"status\": \"recebido\"\n}\n```"
+							},
+							"response": []
+						},
+						{
+							"name": "POST /avaliacao - Criar Feedback Excelente (Nota Alta)",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"pm.test(\"Status code is 201\", function () {",
+											"    pm.response.to.have.status(201);",
+											"});",
+											"",
+											"pm.test(\"Response has id and status\", function () {",
+											"    var jsonData = pm.response.json();",
+											"    pm.expect(jsonData).to.have.property('id');",
+											"    pm.expect(jsonData).to.have.property('status');",
+											"});"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"descricao\": \"Aula excelente! Professor muito didático, conteúdo bem explicado e exemplos práticos muito úteis.\",\n    \"nota\": 10,\n    \"urgencia\": \"LOW\"\n}"
+								},
+								"url": {
+									"raw": "{{cloud_base_url}}/api/avaliacao",
+									"host": [
+										"{{cloud_base_url}}"
+									],
+									"path": [
+										"api",
+										"avaliacao"
+									]
+								},
+								"description": "**POST /api/avaliacao**\n\nCria um feedback com nota alta no Azure Functions.\n\n**Endpoint:** `POST {{cloud_base_url}}/api/avaliacao`\n\n**Campos:**\n- `descricao` (obrigatório): Descrição do feedback\n- `nota` (obrigatório): Nota de 0 a 10 (neste caso: 10)\n- `urgencia` (opcional): `LOW`\n\n**Resposta de Sucesso (201 Created):**\n```json\n{\n  \"id\": \"uuid-do-feedback\",\n  \"status\": \"recebido\"\n}\n```"
+							},
+							"response": []
+						},
+						{
+							"name": "POST /avaliacao - Criar Feedback Sem Urgência (Padrão LOW)",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"pm.test(\"Status code is 201\", function () {",
+											"    pm.response.to.have.status(201);",
+											"});",
+											"",
+											"pm.test(\"Response has id and status\", function () {",
+											"    var jsonData = pm.response.json();",
+											"    pm.expect(jsonData).to.have.property('id');",
+											"    pm.expect(jsonData).to.have.property('status');",
+											"});"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"descricao\": \"Aula razoável, conteúdo básico mas útil.\",\n    \"nota\": 6\n}"
+								},
+								"url": {
+									"raw": "{{cloud_base_url}}/api/avaliacao",
+									"host": [
+										"{{cloud_base_url}}"
+									],
+									"path": [
+										"api",
+										"avaliacao"
+									]
+								},
+								"description": "**POST /api/avaliacao**\n\nCria um feedback sem especificar urgência no Azure Functions. O sistema assume `LOW` como padrão.\n\n**Endpoint:** `POST {{cloud_base_url}}/api/avaliacao`\n\n**Campos:**\n- `descricao` (obrigatório): Descrição do feedback\n- `nota` (obrigatório): Nota de 0 a 10 (neste caso: 6)\n- `urgencia` (opcional): Não informado - assume `LOW` automaticamente\n\n**Resposta de Sucesso (201 Created):**\n```json\n{\n  \"id\": \"uuid-do-feedback\",\n  \"status\": \"recebido\"\n}\n```"
+							},
+							"response": []
+						},
+						{
+							"name": "POST /avaliacao - Erro: Sem Descrição (400)",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"pm.test(\"Status code is 400\", function () {",
+											"    pm.response.to.have.status(400);",
+											"});",
+											"",
+											"pm.test(\"Response has error message\", function () {",
+											"    var jsonData = pm.response.json();",
+											"    pm.expect(jsonData).to.have.property('error');",
+											"});"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"nota\": 8\n}"
+								},
+								"url": {
+									"raw": "{{cloud_base_url}}/api/avaliacao",
+									"host": [
+										"{{cloud_base_url}}"
+									],
+									"path": [
+										"api",
+										"avaliacao"
+									]
+								},
+								"description": "**POST /api/avaliacao**\n\nTesta validação de campos obrigatórios no Azure Functions.\n\n**Endpoint:** `POST {{cloud_base_url}}/api/avaliacao`\n\n**Erro Esperado:**\n- Status: `400 Bad Request`\n- Motivo: Campo `descricao` é obrigatório\n\n**Resposta de Erro (400 Bad Request):**\n```json\n{\n  \"error\": \"Descrição é obrigatória\"\n}\n```"
+							},
+							"response": []
+						},
+						{
+							"name": "POST /avaliacao - Erro: Sem Nota (400)",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"pm.test(\"Status code is 400\", function () {",
+											"    pm.response.to.have.status(400);",
+											"});"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"descricao\": \"Aula interessante\"\n}"
+								},
+								"url": {
+									"raw": "{{cloud_base_url}}/api/avaliacao",
+									"host": [
+										"{{cloud_base_url}}"
+									],
+									"path": [
+										"api",
+										"avaliacao"
+									]
+								},
+								"description": "**POST /api/avaliacao**\n\nTesta validação de campos obrigatórios no Azure Functions.\n\n**Endpoint:** `POST {{cloud_base_url}}/api/avaliacao`\n\n**Erro Esperado:**\n- Status: `400 Bad Request`\n- Motivo: Campo `nota` é obrigatório\n\n**Resposta de Erro (400 Bad Request):**\n```json\n{\n  \"error\": \"Nota é obrigatória\"\n}\n```"
+							},
+							"response": []
+						},
+						{
+							"name": "POST /avaliacao - Erro: Nota Inválida (400)",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"pm.test(\"Status code is 400\", function () {",
+											"    pm.response.to.have.status(400);",
+											"});"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"descricao\": \"Teste de nota inválida\",\n    \"nota\": 15\n}"
+								},
+								"url": {
+									"raw": "{{cloud_base_url}}/api/avaliacao",
+									"host": [
+										"{{cloud_base_url}}"
+									],
+									"path": [
+										"api",
+										"avaliacao"
+									]
+								},
+								"description": "**POST /api/avaliacao**\n\nTesta validação de nota no Azure Functions.\n\n**Endpoint:** `POST {{cloud_base_url}}/api/avaliacao`\n\n**Erro Esperado:**\n- Status: `400 Bad Request`\n- Motivo: Nota deve estar entre 0 e 10\n\n**Resposta de Erro (400 Bad Request):**\n```json\n{\n  \"error\": \"Nota deve estar entre 0 e 10\"\n}\n```"
+							},
+							"response": []
+						},
+						{
+							"name": "POST /avaliacao - Erro: Urgência Inválida (400)",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"pm.test(\"Status code is 400\", function () {",
+											"    pm.response.to.have.status(400);",
+											"});"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"descricao\": \"Teste de urgência inválida\",\n    \"nota\": 5,\n    \"urgencia\": \"INVALID\"\n}"
+								},
+								"url": {
+									"raw": "{{cloud_base_url}}/api/avaliacao",
+									"host": [
+										"{{cloud_base_url}}"
+									],
+									"path": [
+										"api",
+										"avaliacao"
+									]
+								},
+								"description": "**POST /api/avaliacao**\n\nTesta validação de urgência no Azure Functions.\n\n**Endpoint:** `POST {{cloud_base_url}}/api/avaliacao`\n\n**Erro Esperado:**\n- Status: `400 Bad Request`\n- Motivo: Urgência deve ser `LOW`, `MEDIUM` ou `HIGH`\n\n**Resposta de Erro (400 Bad Request):**\n```json\n{\n  \"error\": \"Urgency must be LOW, MEDIUM or HIGH, but was INVALID\"\n}\n```"
+							},
+							"response": []
 						}
 					],
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"descricao\": \"Aula boa, conteúdo interessante mas poderia ter mais exemplos práticos.\",\n    \"nota\": 7,\n    \"urgencia\": \"MEDIUM\"\n}"
-						},
-						"url": {
-							"raw": "{{base_url}}/avaliacao",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"avaliacao"
-							]
-						},
-						"description": "Cria um feedback com nota média. Este feedback será apenas persistido no Table Storage, sem disparar notificação crítica."
-					},
-					"response": []
-				},
-				{
-					"name": "Criar Feedback - Excelente (Nota Alta)",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test(\"Status code is 201\", function () {",
-									"    pm.response.to.have.status(201);",
-									"});",
-									"",
-									"pm.test(\"Response has id and status\", function () {",
-									"    var jsonData = pm.response.json();",
-									"    pm.expect(jsonData).to.have.property('id');",
-									"    pm.expect(jsonData).to.have.property('status');",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"descricao\": \"Aula excelente! Professor muito didático, conteúdo bem explicado e exemplos práticos muito úteis.\",\n    \"nota\": 10,\n    \"urgencia\": \"LOW\"\n}"
-						},
-						"url": {
-							"raw": "{{base_url}}/avaliacao",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"avaliacao"
-							]
-						},
-						"description": "Cria um feedback com nota alta. Demonstra avaliação positiva da aula."
-					},
-					"response": []
-				},
-				{
-					"name": "Criar Feedback - Sem Urgência (Padrão LOW)",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test(\"Status code is 201\", function () {",
-									"    pm.response.to.have.status(201);",
-									"});",
-									"",
-									"pm.test(\"Response has id and status\", function () {",
-									"    var jsonData = pm.response.json();",
-									"    pm.expect(jsonData).to.have.property('id');",
-									"    pm.expect(jsonData).to.have.property('status');",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"descricao\": \"Aula razoável, conteúdo básico mas útil.\",\n    \"nota\": 6\n}"
-						},
-						"url": {
-							"raw": "{{base_url}}/avaliacao",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"avaliacao"
-							]
-						},
-						"description": "Cria um feedback sem especificar urgência. O sistema assume LOW como padrão."
-					},
-					"response": []
-				},
-				{
-					"name": "Criar Feedback - Erro de Validação (Sem Descrição)",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test(\"Status code is 400\", function () {",
-									"    pm.response.to.have.status(400);",
-									"});",
-									"",
-									"pm.test(\"Response has error message\", function () {",
-									"    var jsonData = pm.response.json();",
-									"    pm.expect(jsonData).to.have.property('error');",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"nota\": 8\n}"
-						},
-						"url": {
-							"raw": "{{base_url}}/avaliacao",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"avaliacao"
-							]
-						},
-						"description": "Testa validação de campos obrigatórios. Deve retornar erro 400 pois a descrição é obrigatória."
-					},
-					"response": []
-				},
-				{
-					"name": "Criar Feedback - Erro de Validação (Sem Nota)",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test(\"Status code is 400\", function () {",
-									"    pm.response.to.have.status(400);",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"descricao\": \"Aula interessante\"\n}"
-						},
-						"url": {
-							"raw": "{{base_url}}/avaliacao",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"avaliacao"
-							]
-						},
-						"description": "Testa validação de campos obrigatórios. Deve retornar erro 400 pois a nota é obrigatória."
-					},
-					"response": []
-				},
-				{
-					"name": "Criar Feedback - Erro de Validação (Nota Inválida)",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test(\"Status code is 400\", function () {",
-									"    pm.response.to.have.status(400);",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"descricao\": \"Teste de nota inválida\",\n    \"nota\": 15\n}"
-						},
-						"url": {
-							"raw": "{{base_url}}/avaliacao",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"avaliacao"
-							]
-						},
-						"description": "Testa validação de nota. Deve retornar erro 400 pois a nota deve estar entre 0 e 10."
-					},
-					"response": []
+					"description": "**Feedback Endpoints**\n\nEndpoints para criação e gerenciamento de feedbacks - Ambiente Cloud (Azure).\n\n### POST /api/avaliacao\nRecebe feedback de avaliação de aula.\n\n**Campos da Requisição:**\n- `descricao` (string, **obrigatório**): Descrição do feedback\n- `nota` (integer, **obrigatório**): Nota de 0 a 10\n- `urgencia` (string, **opcional**): Nível de urgência - valores válidos: `LOW`, `MEDIUM`, `HIGH`. Se não informado, assume `LOW`\n\n**Resposta de Sucesso (201 Created):**\n```json\n{\n  \"id\": \"uuid-do-feedback\",\n  \"status\": \"recebido\"\n}\n```\n\n**Regras de Negócio:**\n- Feedbacks com nota ≤ 3 são considerados críticos e disparam notificação automática para administradores\n- A notificação é processada assincronamente via Azure Queue Storage\n- Todos os feedbacks são persistidos no Azure Table Storage\n\n**Códigos de Status:**\n- `201 Created`: Feedback criado com sucesso\n- `400 Bad Request`: Erro de validação (campos obrigatórios ausentes, nota inválida, urgência inválida)\n- `500 Internal Server Error`: Erro interno do servidor\n\n**Nota:** No Azure Functions, os endpoints REST usam o prefixo `/api` automaticamente."
 				}
 			],
-			"description": "Endpoints para criação e gerenciamento de feedbacks de avaliação"
+			"description": "**Ambiente Cloud (Azure)**\n\nRequisições para ambiente Cloud/Azure (https://feedback-function-prod.azurewebsites.net).\n\n**Endpoints disponíveis:**\n- `GET /api/health` - Health check\n- `POST /api/avaliacao` - Criar feedback\n\n**Nota:** No Azure Functions, os endpoints REST usam o prefixo `/api` automaticamente."
 		}
 	],
 	"variable": [
