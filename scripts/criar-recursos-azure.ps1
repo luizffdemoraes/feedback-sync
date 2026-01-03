@@ -15,7 +15,7 @@ param(
     [string]$ResourceGroupName = "feedback-rg",
     
     [Parameter(Mandatory=$false)]
-    [string]$Location = "brazilsouth",
+    [string]$Location = "northcentralus",  # Região padrão que funciona com Azure for Students
     
     [Parameter(Mandatory=$false)]
     [string]$Suffix = "prod",  # Sufixo único para nomes (padrão: "prod")
@@ -51,8 +51,71 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
+# Obter subscription atual e definir explicitamente
+$currentSubscription = az account show --query id -o tsv
+if ($LASTEXITCODE -ne 0 -or -not $currentSubscription) {
+    Write-Host "[ERRO] Não foi possível obter a subscription atual" -ForegroundColor Red
+    exit 1
+}
+
+# Definir subscription explicitamente para evitar erros
+az account set --subscription $currentSubscription 2>&1 | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "[ERRO] Não foi possível definir a subscription" -ForegroundColor Red
+    exit 1
+}
+
+# Verificar permissões da subscription
 Write-Host "[OK] Azure CLI verificado" -ForegroundColor Green
-Write-Host "   Subscription: $(az account show --query name -o tsv)" -ForegroundColor Gray
+$subscriptionName = az account show --query name -o tsv
+$subscriptionState = az account show --query state -o tsv
+Write-Host "   Subscription: $subscriptionName" -ForegroundColor Gray
+Write-Host "   Subscription ID: $currentSubscription" -ForegroundColor Gray
+Write-Host "   Estado: $subscriptionState" -ForegroundColor Gray
+
+if ($subscriptionState -ne "Enabled") {
+    Write-Host "[ERRO] A subscription não está habilitada. Estado: $subscriptionState" -ForegroundColor Red
+    exit 1
+}
+
+# Verificar e registrar Resource Providers necessários
+Write-Host "   Verificando Resource Providers..." -ForegroundColor Gray
+$requiredProviders = @("Microsoft.Storage", "Microsoft.Web", "Microsoft.Insights")
+
+foreach ($provider in $requiredProviders) {
+    $providerStatus = az provider show --namespace $provider --query "registrationState" -o tsv 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        if ($providerStatus -ne "Registered") {
+            Write-Host "   Registrando provider: $provider..." -ForegroundColor Yellow
+            az provider register --namespace $provider --wait --output none 2>&1 | Out-Null
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host "   [OK] Provider $provider registrado" -ForegroundColor Green
+            } else {
+                Write-Host "   [AVISO] Falha ao registrar provider $provider" -ForegroundColor Yellow
+            }
+        } else {
+            Write-Host "   [OK] Provider $provider já registrado" -ForegroundColor Gray
+        }
+    } else {
+        Write-Host "   [AVISO] Não foi possível verificar provider $provider" -ForegroundColor Yellow
+    }
+}
+
+Write-Host ""
+
+# Fazer refresh do token de acesso para garantir autenticação válida
+Write-Host "   Atualizando token de acesso..." -ForegroundColor Gray
+az account get-access-token --output none 2>&1 | Out-Null
+if ($LASTEXITCODE -eq 0) {
+    Write-Host "   [OK] Token atualizado" -ForegroundColor Green
+} else {
+    Write-Host "   [AVISO] Não foi possível atualizar o token" -ForegroundColor Yellow
+}
+Write-Host ""
+
+# Região padrão que funciona com Azure for Students
+# Se precisar usar outra região, especifique via parâmetro -Location
+Write-Host "   Região configurada: $Location" -ForegroundColor Cyan
 Write-Host ""
 
 # Normalizar sufixo (apenas letras minúsculas e números)
@@ -60,12 +123,45 @@ $Suffix = $Suffix.ToLower() -replace '[^a-z0-9]', ''
 
 # 1. Criar Resource Group
 Write-Host "Criando Resource Group: $ResourceGroupName" -ForegroundColor Yellow
-az group create --name $ResourceGroupName --location $Location --output none --only-show-errors
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "[ERRO] Erro ao criar Resource Group" -ForegroundColor Red
-    exit 1
+
+# Verificar se Resource Group já existe
+$oldErrorAction = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
+$existingRgLocation = az group show --name $ResourceGroupName --query location -o tsv 2>&1
+$ErrorActionPreference = $oldErrorAction
+
+if ($LASTEXITCODE -eq 0 -and $existingRgLocation -and -not ($existingRgLocation -match "not found" -or $existingRgLocation -match "ERROR")) {
+    $existingRgLocation = $existingRgLocation.Trim()
+    if ($existingRgLocation -eq $Location) {
+        Write-Host "   [OK] Resource Group já existe na região: $Location" -ForegroundColor Green
+    } else {
+        Write-Host "   [ERRO] Resource Group já existe em região diferente: $existingRgLocation" -ForegroundColor Red
+        Write-Host "   Para evitar custos, delete o Resource Group existente ou use outro nome:" -ForegroundColor Yellow
+        Write-Host "   az group delete --name $ResourceGroupName --yes" -ForegroundColor Gray
+        Write-Host "   Ou use outro nome: .\criar-recursos-azure.ps1 -ResourceGroupName `"feedback-rg-novo`"" -ForegroundColor Gray
+        exit 1
+    }
+} else {
+    # Criar Resource Group
+    $oldErrorAction = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    $rgError = az group create --name $ResourceGroupName --location $Location --output none --only-show-errors 2>&1
+    $ErrorActionPreference = $oldErrorAction
+    
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERRO] Erro ao criar Resource Group" -ForegroundColor Red
+        Write-Host "   Detalhes: $rgError" -ForegroundColor Yellow
+        
+        if ($rgError -match "RequestDisallowedByAzure" -or $rgError -match "disallowed by Azure") {
+            Write-Host ""
+            Write-Host "   ⚠️ Região '$Location' não disponível para sua subscription" -ForegroundColor Red
+            Write-Host "   Execute com outra região: .\criar-recursos-azure.ps1 -Location `"northcentralus`"" -ForegroundColor Yellow
+            Write-Host ""
+        }
+        exit 1
+    }
+    Write-Host "   [OK] Resource Group criado" -ForegroundColor Green
 }
-Write-Host "   [OK] Resource Group criado" -ForegroundColor Green
 
 # 2. Criar Storage Account
 $storageAccountName = "feedbackstorage$Suffix"
@@ -75,21 +171,91 @@ if ($storageAccountName.Length -gt 24) {
 }
 
 Write-Host "`nCriando Storage Account: $storageAccountName" -ForegroundColor Yellow
-az storage account create `
-    --name $storageAccountName `
-    --resource-group $ResourceGroupName `
-    --location $Location `
-    --sku Standard_LRS `
-    --kind StorageV2 `
-    --allow-blob-public-access false `
-    --output none `
-    --only-show-errors
 
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "[ERRO] Erro ao criar Storage Account" -ForegroundColor Red
-    exit 1
+# Verificar se Storage Account já existe (nomes são únicos globalmente)
+$storageAccountExists = $false
+$oldErrorAction = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
+$existingStorageLocationOutput = az storage account show --name $storageAccountName --query location -o tsv 2>&1
+$ErrorActionPreference = $oldErrorAction
+
+if ($LASTEXITCODE -eq 0 -and $existingStorageLocationOutput -and -not ($existingStorageLocationOutput -match "not found" -or $existingStorageLocationOutput -match "ERROR")) {
+    # Storage Account existe, verificar região
+    Write-Host "   [AVISO] Storage Account '$storageAccountName' já existe" -ForegroundColor Yellow
+    Write-Host "   Verificando região..." -ForegroundColor Gray
+    $existingStorageLocation = $existingStorageLocationOutput.Trim()
+    if ($existingStorageLocation -eq $Location) {
+        Write-Host "   [OK] Storage Account já existe na região correta: $Location" -ForegroundColor Green
+        $storageAccountExists = $true
+    } else {
+        Write-Host "   [AVISO] Storage Account existe em região diferente: $existingStorageLocation" -ForegroundColor Yellow
+        Write-Host "   Você precisará deletar manualmente ou usar um nome diferente (sufixo)" -ForegroundColor Yellow
+        Write-Host "   Para deletar: az storage account delete --name $storageAccountName --yes" -ForegroundColor Gray
+        Write-Host "   Ou use um sufixo diferente: .\criar-recursos-azure.ps1 -Suffix `"novo`"" -ForegroundColor Gray
+        exit 1
+    }
 }
-Write-Host "   [OK] Storage Account criado" -ForegroundColor Green
+
+# Tentar criar o Storage Account apenas se não existir
+if (-not $storageAccountExists) {
+    $oldErrorAction = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    $storageError = az storage account create `
+        --name $storageAccountName `
+        --resource-group $ResourceGroupName `
+        --location $Location `
+        --sku Standard_LRS `
+        --kind StorageV2 `
+        --allow-blob-public-access false `
+        --output json `
+        --only-show-errors 2>&1
+    $ErrorActionPreference = $oldErrorAction
+} else {
+    $storageError = ""
+    $LASTEXITCODE = 0
+}
+
+if ($LASTEXITCODE -ne 0 -and -not $storageAccountExists) {
+    Write-Host "[ERRO] Erro ao criar Storage Account" -ForegroundColor Red
+    Write-Host "   Detalhes do erro:" -ForegroundColor Yellow
+    Write-Host $storageError -ForegroundColor Red
+    
+    # Verificar se é erro de região não disponível
+    if ($storageError -match "RequestDisallowedByAzure" -or $storageError -match "disallowed by Azure") {
+        Write-Host ""
+        Write-Host "   ⚠️ ERRO: Região '$Location' não disponível para sua subscription" -ForegroundColor Red
+        Write-Host ""
+        Write-Host "   SOLUÇÕES:" -ForegroundColor Cyan
+        Write-Host "   1. Execute o script com uma região que funciona (northcentralus é a padrão):" -ForegroundColor White
+        Write-Host "      .\criar-recursos-azure.ps1 -Location `"northcentralus`" -Suffix `"$Suffix`"" -ForegroundColor Gray
+        Write-Host ""
+        Write-Host "   2. Ou tente outras regiões disponíveis:" -ForegroundColor White
+        Write-Host "      .\criar-recursos-azure.ps1 -Location `"westus2`" -Suffix `"$Suffix`"" -ForegroundColor Gray
+        Write-Host "      .\criar-recursos-azure.ps1 -Location `"centralus`" -Suffix `"$Suffix`"" -ForegroundColor Gray
+        Write-Host ""
+        Write-Host "   3. Listar todas as regiões disponíveis:" -ForegroundColor White
+        Write-Host "      az account list-locations --query `"[?metadata.regionCategory=='Recommended'].{Name:name, DisplayName:displayName}`" -o table" -ForegroundColor Gray
+        Write-Host ""
+        Write-Host "   NOTA: O script usa 'northcentralus' como padrão (já testado e funcionando)" -ForegroundColor Yellow
+        Write-Host ""
+    }
+    # Verificar se é erro de subscription
+    elseif ($storageError -match "SubscriptionNotFound") {
+        Write-Host ""
+        Write-Host "   SOLUÇÕES POSSÍVEIS:" -ForegroundColor Cyan
+        Write-Host "   1. Verifique se a subscription 'Azure for Students' está ativa no portal Azure" -ForegroundColor White
+        Write-Host "   2. Tente fazer logout e login novamente:" -ForegroundColor White
+        Write-Host "      az logout" -ForegroundColor Gray
+        Write-Host "      az login" -ForegroundColor Gray
+        Write-Host "   3. Verifique se há restrições regionais na subscription" -ForegroundColor White
+        Write-Host "   4. Certifique-se de que os Resource Providers estão registrados" -ForegroundColor White
+        Write-Host ""
+    }
+    
+    exit 1
+} elseif (-not $storageAccountExists) {
+    Write-Host "   [OK] Storage Account criado" -ForegroundColor Green
+}
 
 # Obter connection string do Storage
 Write-Host "   Obtendo connection string..." -ForegroundColor Gray
@@ -100,14 +266,16 @@ $storageConnectionString = az storage account show-connection-string `
 
 # Criar container para relatórios
 Write-Host "   Criando container 'weekly-reports'..." -ForegroundColor Gray
+$oldErrorAction = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
 az storage container create `
     --name "weekly-reports" `
     --account-name $storageAccountName `
     --connection-string $storageConnectionString `
     --public-access off `
     --output none `
-    --only-show-errors `
-    --fail-on-exist false
+    --only-show-errors 2>&1 | Out-Null
+$ErrorActionPreference = $oldErrorAction
 
 Write-Host "   [OK] Container criado" -ForegroundColor Green
 
@@ -123,7 +291,7 @@ az functionapp create `
     --resource-group $ResourceGroupName `
     --consumption-plan-location $Location `
     --runtime java `
-    --runtime-version 21 `
+    --runtime-version 21.0 `
     --functions-version 4 `
     --name $functionAppName `
     --storage-account $storageAccountName `
