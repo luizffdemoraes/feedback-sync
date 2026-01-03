@@ -101,7 +101,7 @@ if (Test-Path $localSettingsPath) {
     Write-Host ""
     Write-Host "   NOTA: O arquivo fonte deve ter valores vazios (e um template)." -ForegroundColor Cyan
     Write-Host "      O script executar-azure-functions-local.ps1 atualiza automaticamente" -ForegroundColor Cyan
-    Write-Host "      a copia no diretorio target\azure-functions\feedback-service-app\local.settings.json" -ForegroundColor Cyan
+    Write-Host "      a copia no diretorio target\azure-functions\feedback-function-prod\local.settings.json" -ForegroundColor Cyan
 } else {
     Write-Host "   [X] Arquivo nao encontrado: $localSettingsPath" -ForegroundColor Red
 }
@@ -110,7 +110,8 @@ Write-Host ""
 
 # Verificar se existe o arquivo de destino (apos compilacao)
 Write-Host "5. Arquivo local.settings.json de destino (apos compilacao):" -ForegroundColor Yellow
-$functionsDir = Join-Path $projectRoot "target\azure-functions\feedback-service-app"
+# O nome do diretório é definido no pom.xml como functionAppName (feedback-function-prod)
+$functionsDir = Join-Path $projectRoot "target\azure-functions\feedback-function-prod"
 $localSettingsTarget = Join-Path $functionsDir "local.settings.json"
 
 if (Test-Path $localSettingsTarget) {

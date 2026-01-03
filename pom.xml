@@ -94,12 +94,6 @@
             <artifactId>quarkus-rest-jackson</artifactId>
         </dependency>
 
-        <!-- Azure Functions HTTP - Expõe endpoints REST como HTTP Triggers -->
-        <dependency>
-            <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-azure-functions-http</artifactId>
-        </dependency>
-
         <!-- Health Check (SmallRye Health) -->
         <dependency>
             <groupId>io.quarkus</groupId>

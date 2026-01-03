@@ -131,7 +131,8 @@ $projectRoot = Split-Path -Parent $scriptPath
 Set-Location $projectRoot
 
 # Verificar se já existe compilação do Azure Functions
-$functionsDir = Join-Path $projectRoot "target\azure-functions\feedback-service-app"
+# O nome do diretório é definido no pom.xml como functionAppName (feedback-function-prod)
+$functionsDir = Join-Path $projectRoot "target\azure-functions\feedback-function-prod"
 $needsCompile = $true
 
 if (Test-Path $functionsDir) {
@@ -147,27 +148,94 @@ if (Test-Path $functionsDir) {
     }
 }
 
+# Verificar se o JAR problemático quarkus-azure-functions-http ainda existe
+$libDir = Join-Path $functionsDir "lib"
+$problematicJar = $null
+if (Test-Path $libDir) {
+    $problematicJar = Get-ChildItem -Path $libDir -Filter "quarkus-azure-functions-http-*.jar" -ErrorAction SilentlyContinue | Select-Object -First 1
+}
+
+# Se o JAR problemático existe, tentar removê-lo ANTES de compilar
+if ($problematicJar) {
+    Write-Host ""
+    Write-Host "⚠️  Detectado JAR problemático: $($problematicJar.Name)" -ForegroundColor Yellow
+    Write-Host "   Este JAR causa NullPointerException em funções não-HTTP" -ForegroundColor Yellow
+    Write-Host "   Tentando remover antes de compilar..." -ForegroundColor Yellow
+    
+    try {
+        Remove-Item -Path $problematicJar.FullName -Force -ErrorAction Stop
+        Write-Host "   ✅ JAR removido com sucesso" -ForegroundColor Green
+        # Se conseguiu remover, ainda precisa recompilar para garantir que não será recriado
+        $needsCompile = $true
+    } catch {
+        Write-Host "   ⚠️  Não foi possível remover o JAR (pode estar em uso)" -ForegroundColor Yellow
+        Write-Host "   Forçando recompilação para garantir remoção..." -ForegroundColor Yellow
+        $needsCompile = $true
+    }
+}
+
 # Compilar o projeto (apenas se necessário)
 if ($needsCompile) {
     Write-Host ""
     Write-Host "Compilando projeto..." -ForegroundColor Yellow
     Write-Host "   (Isso pode levar alguns minutos na primeira vez)" -ForegroundColor Gray
-    Write-Host "   NOTA: Usando 'package' sem 'clean' para evitar conflito com aplicação rodando" -ForegroundColor Gray
-    Write-Host ""
     
-    # Usa apenas 'package' sem 'clean' para evitar conflito com aplicação Quarkus rodando
+    # Tentar fazer package sem clean primeiro (mais rápido e não requer arquivos livres)
+    Write-Host "   Executando 'mvn package'..." -ForegroundColor Gray
+    $compileSuccess = $false
+    
     .\mvnw.cmd package -DskipTests
     
-    if ($LASTEXITCODE -ne 0) {
+    if ($LASTEXITCODE -eq 0) {
+        $compileSuccess = $true
         Write-Host ""
-        Write-Host "❌ Erro ao compilar o projeto" -ForegroundColor Red
+        Write-Host "✅ Compilação concluída" -ForegroundColor Green
+    } else {
         Write-Host ""
-        Write-Host "DICA: Se o erro for relacionado a arquivos em uso, pare a aplicação Quarkus primeiro (Ctrl+C)" -ForegroundColor Yellow
-        exit 1
+        Write-Host "⚠️  Compilação com 'package' falhou, tentando 'clean package'..." -ForegroundColor Yellow
+        Write-Host "   (Se falhar novamente, pode ser porque arquivos estão em uso)" -ForegroundColor Gray
+        
+        # Tentar clean package apenas se package falhou
+        .\mvnw.cmd clean package -DskipTests
+        
+        if ($LASTEXITCODE -eq 0) {
+            $compileSuccess = $true
+            Write-Host ""
+            Write-Host "✅ Compilação concluída (com clean)" -ForegroundColor Green
+        } else {
+            Write-Host ""
+            Write-Host "❌ Erro ao compilar o projeto" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "DICA: Se o erro for relacionado a arquivos em uso:" -ForegroundColor Yellow
+            Write-Host "   1. Pare a aplicação Quarkus se estiver rodando (Ctrl+C)" -ForegroundColor Yellow
+            Write-Host "   2. Feche qualquer IDE ou processo que possa estar usando os arquivos" -ForegroundColor Yellow
+            Write-Host "   3. Execute o script novamente" -ForegroundColor Yellow
+            exit 1
+        }
     }
     
-    Write-Host ""
-    Write-Host "✅ Compilação concluída" -ForegroundColor Green
+    # Verificar novamente se o JAR problemático foi removido após compilação
+    if ($compileSuccess) {
+        $libDir = Join-Path $functionsDir "lib"
+        if (Test-Path $libDir) {
+            $remainingJar = Get-ChildItem -Path $libDir -Filter "quarkus-azure-functions-http-*.jar" -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($remainingJar) {
+                Write-Host ""
+                Write-Host "⚠️  Aviso: JAR problemático ainda existe após compilação: $($remainingJar.Name)" -ForegroundColor Yellow
+                Write-Host "   Removendo manualmente..." -ForegroundColor Yellow
+                try {
+                    Remove-Item -Path $remainingJar.FullName -Force -ErrorAction Stop
+                    Write-Host "   ✅ JAR removido manualmente" -ForegroundColor Green
+                } catch {
+                    Write-Host "   ⚠️  Não foi possível remover o JAR manualmente: $_" -ForegroundColor Yellow
+                    Write-Host "   O JAR pode estar em uso. Tente parar todas as aplicações e executar novamente." -ForegroundColor Yellow
+                }
+            } else {
+                Write-Host ""
+                Write-Host "✅ JAR problemático não foi recriado na compilação" -ForegroundColor Green
+            }
+        }
+    }
     
     # Remover function.json do QuarkusHttp (não usado na arquitetura híbrida)
     Write-Host ""
@@ -183,6 +251,19 @@ if ($needsCompile) {
     Write-Host ""
     Write-Host "✅ Usando compilação existente" -ForegroundColor Green
     
+    # Verificar e remover JAR problemático mesmo se não recompilou
+    if ($problematicJar) {
+        Write-Host ""
+        Write-Host "⚠️  Removendo JAR problemático da compilação existente..." -ForegroundColor Yellow
+        try {
+            Remove-Item -Path $problematicJar.FullName -Force -ErrorAction Stop
+            Write-Host "   ✅ JAR removido: $($problematicJar.Name)" -ForegroundColor Green
+        } catch {
+            Write-Host "   ⚠️  Não foi possível remover o JAR: $_" -ForegroundColor Yellow
+            Write-Host "   O JAR pode estar em uso. Tente parar todas as aplicações." -ForegroundColor Yellow
+        }
+    }
+    
     # Verificar e remover QuarkusHttp mesmo se não recompilou
     $quarkusHttpFunctionJson = Join-Path $functionsDir "QuarkusHttp\function.json"
     if (Test-Path $quarkusHttpFunctionJson) {
@@ -194,7 +275,7 @@ if ($needsCompile) {
 
 # Verificar se o diretório de output existe
 if (-not $functionsDir) {
-    $functionsDir = Join-Path $projectRoot "target\azure-functions\feedback-service-app"
+    $functionsDir = Join-Path $projectRoot "target\azure-functions\feedback-function-prod"
 }
 if (-not (Test-Path $functionsDir)) {
     Write-Host "❌ Diretório de Azure Functions não encontrado: $functionsDir" -ForegroundColor Red
@@ -372,6 +453,25 @@ if (Test-Path $hostJsonSource) {
     Write-Host "   ✅ host.json copiado com sucesso" -ForegroundColor Green
 } else {
     Write-Host "   [⚠] host.json não encontrado em $hostJsonSource (usando padrão)" -ForegroundColor Yellow
+}
+
+# Verificação final: garantir que o JAR problemático não existe
+Write-Host ""
+Write-Host "Verificação final: removendo JAR problemático se existir..." -ForegroundColor Yellow
+$libDir = Join-Path $functionsDir "lib"
+if (Test-Path $libDir) {
+    $problematicJars = Get-ChildItem -Path $libDir -Filter "quarkus-azure-functions-http-*.jar" -ErrorAction SilentlyContinue
+    if ($problematicJars) {
+        foreach ($jar in $problematicJars) {
+            Write-Host "   Removendo: $($jar.Name)" -ForegroundColor Yellow
+            Remove-Item -Path $jar.FullName -Force
+        }
+        Write-Host "   ✅ JARs problemáticos removidos" -ForegroundColor Green
+    } else {
+        Write-Host "   ✅ Nenhum JAR problemático encontrado" -ForegroundColor Green
+    }
+} else {
+    Write-Host "   ⚠️  Diretório lib não encontrado" -ForegroundColor Yellow
 }
 
 Write-Host ""
