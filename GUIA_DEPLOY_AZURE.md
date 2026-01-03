@@ -55,6 +55,28 @@ A aplicação requer os seguintes recursos no Azure:
 | **Resource Group** | - | Agrupa todos os recursos |
 | **Mailtrap** | Free Tier | Envio de emails para notificações críticas |
 
+### 🌍 Região Azure
+
+**Região Padrão**: `northcentralus` (North Central US)
+
+Todos os recursos são criados na mesma região para:
+- ✅ Reduzir latência entre recursos
+- ✅ Minimizar custos de transferência de dados
+- ✅ Garantir compliance com requisitos regionais
+- ✅ Otimizar performance da aplicação
+
+**⚠️ Nota sobre Azure for Students**: A região `northcentralus` foi escolhida como padrão porque é compatível com assinaturas Azure for Students. Se sua subscription tiver restrições regionais, você pode especificar outra região usando o parâmetro `-Location` no script de criação.
+
+**Regiões alternativas recomendadas** (se `northcentralus` não estiver disponível):
+- `westus2` (West US 2)
+- `centralus` (Central US)
+- `eastus` (East US)
+
+Para listar todas as regiões disponíveis na sua subscription:
+```powershell
+az account list-locations --query "[?metadata.regionCategory=='Recommended'].{Name:name, DisplayName:displayName}" -o table
+```
+
 ### Detalhamento dos Recursos
 
 #### 1. Storage Account
@@ -76,6 +98,7 @@ A aplicação requer os seguintes recursos no Azure:
 - **OS**: Linux
 - **Plan**: Consumption (Serverless)
 - **Functions Extension**: ~4
+- **Região**: `northcentralus` (padrão) ou conforme especificado
 
 ---
 
@@ -128,9 +151,9 @@ O script `criar-recursos-azure.ps1` cria todos os recursos necessários e config
 #### Uso Básico (sem Mailtrap)
 
 ```powershell
+# Usando região padrão (northcentralus)
 .\scripts\criar-recursos-azure.ps1 `
     -ResourceGroupName "feedback-rg" `
-    -Location "brazilsouth" `
     -Suffix "prod"
 ```
 
@@ -141,9 +164,23 @@ O script `criar-recursos-azure.ps1` cria todos os recursos necessários e config
 Para configurar tudo automaticamente, incluindo as variáveis do Mailtrap:
 
 ```powershell
+# Usando região padrão (northcentralus)
 .\scripts\criar-recursos-azure.ps1 `
     -ResourceGroupName "feedback-rg" `
-    -Location "brazilsouth" `
+    -Suffix "prod" `
+    -MailtrapApiToken "seu-token-mailtrap" `
+    -MailtrapInboxId "seu-inbox-id" `
+    -AdminEmail "admin@exemplo.com"
+```
+
+#### Especificando Região Personalizada
+
+Se precisar usar uma região diferente (por exemplo, se `northcentralus` não estiver disponível na sua subscription):
+
+```powershell
+.\scripts\criar-recursos-azure.ps1 `
+    -ResourceGroupName "feedback-rg" `
+    -Location "westus2" `
     -Suffix "prod" `
     -MailtrapApiToken "seu-token-mailtrap" `
     -MailtrapInboxId "seu-inbox-id" `
@@ -155,7 +192,7 @@ Para configurar tudo automaticamente, incluindo as variáveis do Mailtrap:
 | Parâmetro | Obrigatório | Descrição | Padrão |
 |-----------|-------------|-----------|--------|
 | `ResourceGroupName` | Não | Nome do Resource Group | `feedback-rg` |
-| `Location` | Não | Região do Azure | `brazilsouth` |
+| `Location` | Não | Região do Azure onde os recursos serão criados | `northcentralus` |
 | `Suffix` | Não | Sufixo único para nomes dos recursos | `prod` |
 | `MailtrapApiToken` | Não | Token da API do Mailtrap | - |
 | `MailtrapInboxId` | Não | ID da inbox do Mailtrap | - |
@@ -287,16 +324,25 @@ az functionapp config appsettings set `
 Você pode executar o script novamente apenas para atualizar as configurações do Mailtrap (os recursos já existentes não serão recriados):
 
 ```powershell
+# Usando região padrão (northcentralus)
 .\scripts\criar-recursos-azure.ps1 `
     -ResourceGroupName "feedback-rg" `
-    -Location "brazilsouth" `
+    -Suffix "prod" `
+    -MailtrapApiToken "seu-token-mailtrap" `
+    -MailtrapInboxId "seu-inbox-id" `
+    -AdminEmail "admin@exemplo.com"
+
+# Ou especificando região personalizada
+.\scripts\criar-recursos-azure.ps1 `
+    -ResourceGroupName "feedback-rg" `
+    -Location "westus2" `
     -Suffix "prod" `
     -MailtrapApiToken "seu-token-mailtrap" `
     -MailtrapInboxId "seu-inbox-id" `
     -AdminEmail "admin@exemplo.com"
 ```
 
-**Nota**: O script detecta recursos existentes e apenas atualiza as configurações necessárias.
+**Nota**: O script detecta recursos existentes e apenas atualiza as configurações necessárias. Se você especificar uma região diferente da usada na criação inicial, o script avisará sobre a incompatibilidade.
 
 ### 3. Verificar Configurações
 
@@ -315,10 +361,11 @@ az functionapp config appsettings list `
 
 ```powershell
 .\scripts\implantar-azure.ps1 `
-    -FunctionAppName "feedback-function-<seu-sufixo>" `
-    -ResourceGroup "feedback-rg" `
-    -Location "brazilsouth"
+    -FunctionAppName "feedback-function-prod" `
+    -ResourceGroup "feedback-rg"
 ```
+
+**Nota**: O script de deploy não requer o parâmetro `Location`, pois a Function App já foi criada na região correta pelo script `criar-recursos-azure.ps1`.
 
 ### Opção 2: Deploy Manual via Maven
 
@@ -617,9 +664,15 @@ A exclusão do Resource Group é assíncrona. Use `--no-wait` para não bloquear
 Após destruir os recursos, você pode recriá-los usando o script de criação:
 
 ```powershell
+# Usando região padrão (northcentralus)
 .\scripts\criar-recursos-azure.ps1 `
     -ResourceGroupName "feedback-rg" `
-    -Location "brazilsouth" `
+    -Suffix "prod"
+
+# Ou especificando região personalizada
+.\scripts\criar-recursos-azure.ps1 `
+    -ResourceGroupName "feedback-rg" `
+    -Location "westus2" `
     -Suffix "prod"
 ```
 

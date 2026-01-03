@@ -257,6 +257,8 @@ O projeto segue os princípios da **Clean Architecture**, garantindo:
 | **Mailtrap** | Free Tier | Envio de emails para notificações críticas |
 | **Application Insights** | Monitoramento | Logs, métricas e rastreamento |
 
+**🌍 Região**: Todos os recursos Azure são criados na região **`northcentralus`** (North Central US) por padrão, garantindo baixa latência entre componentes e otimização de custos.
+
 ---
 
 ## 📊 Diagramas do Sistema
@@ -804,7 +806,9 @@ O script irá:
 2. Criar Storage Account (Table + Blob)
 3. Criar Function App
 4. Configurar Application Settings (incluindo Mailtrap API Token e Inbox ID)
-6. Fazer deploy da aplicação
+5. Fazer deploy da aplicação
+
+**🌍 Região Azure**: Por padrão, todos os recursos são criados na região **`northcentralus`** (North Central US). Esta região foi escolhida por ser compatível com assinaturas Azure for Students. Se precisar usar outra região, especifique o parâmetro `-Location` ao executar o script.
 
 ### Deploy Manual
 
