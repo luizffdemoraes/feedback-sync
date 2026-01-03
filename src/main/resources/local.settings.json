@@ -8,6 +8,11 @@
     "mailtrap.api-token": "",
     "admin.email": "",
     "mailtrap.inbox-id": "",
+    
+    "MAILTRAP_API_TOKEN": "",
+    "ADMIN_EMAIL": "",
+    "MAILTRAP_INBOX_ID": "",
+    "QUARKUS_PROFILE": "local",
 
     "azure.storage.connection-string": "UseDevelopmentStorage=true",
     "azure.storage.container-name": "weekly-reports",

@@ -208,7 +208,7 @@ if (Test-Path $localSettingsSource) {
     
     # Garantir que todas as propriedades existam antes de atribuir valores
     # Verificar e criar propriedades se não existirem
-    $propertiesToCheck = @("mailtrap.api-token", "admin.email", "mailtrap.inbox-id")
+    $propertiesToCheck = @("mailtrap.api-token", "admin.email", "mailtrap.inbox-id", "MAILTRAP_API_TOKEN", "ADMIN_EMAIL", "MAILTRAP_INBOX_ID")
     foreach ($propName in $propertiesToCheck) {
         if (-not $localSettings.Values.PSObject.Properties[$propName]) {
             Write-Host "   Criando propriedade: $propName" -ForegroundColor Gray
@@ -221,6 +221,17 @@ if (Test-Path $localSettingsSource) {
     $localSettings.Values."mailtrap.api-token" = [string]$mailtrapToken
     $localSettings.Values."admin.email" = [string]$adminEmail
     $localSettings.Values."mailtrap.inbox-id" = [string]$mailtrapInboxId
+    
+    # Adicionar também no formato de variáveis de ambiente (para garantir compatibilidade)
+    # O Azure Functions Core Tools converte propriedades do local.settings.json para variáveis de ambiente
+    # Mas o Quarkus espera variáveis no formato MAILTRAP_API_TOKEN (com underscores)
+    # Adicionar ambas as formas para garantir compatibilidade
+    $localSettings.Values."MAILTRAP_API_TOKEN" = [string]$mailtrapToken
+    $localSettings.Values."ADMIN_EMAIL" = [string]$adminEmail
+    $localSettings.Values."MAILTRAP_INBOX_ID" = [string]$mailtrapInboxId
+    
+    # Configurar perfil do Quarkus para usar application-local.properties
+    $localSettings.Values."QUARKUS_PROFILE" = "local"
     
     # Verificar imediatamente após atribuir
     Write-Host "   Verificação imediata - mailtrap.inbox-id: '$($localSettings.Values.'mailtrap.inbox-id')'" -ForegroundColor Cyan
@@ -235,9 +246,9 @@ if (Test-Path $localSettingsSource) {
     
     Write-Host ""
     Write-Host "   ✅ Configurações atualizadas com sucesso!" -ForegroundColor Green
-    Write-Host "   ✅ mailtrap.api-token: aplicado (primeiros 8 caracteres: $($mailtrapToken.Substring(0, [Math]::Min(8, $mailtrapToken.Length)))...)" -ForegroundColor Green
-    Write-Host "   ✅ admin.email: $adminEmail" -ForegroundColor Green
-    Write-Host "   ✅ mailtrap.inbox-id: $mailtrapInboxId" -ForegroundColor Green
+    Write-Host "   ✅ mailtrap.api-token / MAILTRAP_API_TOKEN: aplicado (primeiros 8 caracteres: $($mailtrapToken.Substring(0, [Math]::Min(8, $mailtrapToken.Length)))...)" -ForegroundColor Green
+    Write-Host "   ✅ admin.email / ADMIN_EMAIL: $adminEmail" -ForegroundColor Green
+    Write-Host "   ✅ mailtrap.inbox-id / MAILTRAP_INBOX_ID: $mailtrapInboxId" -ForegroundColor Green
     
     # Verificar se os valores foram realmente salvos
     Write-Host ""
@@ -295,6 +306,11 @@ if (Test-Path $localSettingsSource) {
         "mailtrap.api-token" = $mailtrapTokenStr
         "admin.email" = $adminEmailStr
         "mailtrap.inbox-id" = $mailtrapInboxIdStr
+        # Adicionar também no formato de variáveis de ambiente (para garantir compatibilidade)
+        "MAILTRAP_API_TOKEN" = $mailtrapTokenStr
+        "ADMIN_EMAIL" = $adminEmailStr
+        "MAILTRAP_INBOX_ID" = $mailtrapInboxIdStr
+        "QUARKUS_PROFILE" = "local"
         "azure.storage.connection-string" = "UseDevelopmentStorage=true"
         "azure.storage.container-name" = "weekly-reports"
         "azure.table.table-name" = "feedbacks"

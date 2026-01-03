@@ -68,8 +68,11 @@ public class QueueNotificationGatewayImpl implements QueueNotificationGateway {
     public void publishCritical(Object payload) {
         try {
             String jsonPayload = objectMapper.writeValueAsString(payload);
+            logger.debug("Publicando mensagem na fila {} (tamanho: {} chars)", QUEUE_NAME, jsonPayload.length());
+            logger.debug("Conteúdo JSON (primeiros 200 chars): {}", 
+                jsonPayload.length() > 200 ? jsonPayload.substring(0, 200) + "..." : jsonPayload);
             queueClient.sendMessage(jsonPayload);
-            logger.debug("Mensagem crítica publicada na fila: {}", QUEUE_NAME);
+            logger.info("✓ Mensagem crítica publicada na fila: {} (tamanho: {} chars)", QUEUE_NAME, jsonPayload.length());
         } catch (JsonProcessingException e) {
             String payloadType = payload != null ? payload.getClass().getSimpleName() : "null";
             String errorMessage = String.format("Erro ao serializar payload para JSON. Fila: %s. Tipo do payload: %s", 

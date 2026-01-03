@@ -112,13 +112,13 @@ public class EmailNotificationGatewayImpl implements EmailNotificationGateway {
      * Envia email ao admin usando Mailtrap.
      */
     private void sendEmailToAdmin(String subject, String content) throws NotificationException {
-        logger.debug("=== sendEmailToAdmin iniciado ===");
-        logger.debug("Subject: {}", subject);
-        logger.debug("Content length: {} caracteres", content != null ? content.length() : 0);
-        logger.debug("mailtrapClient é null: {}", mailtrapClient == null);
-        logger.debug("mailtrapApiToken está vazio: {}", 
+        logger.info("=== sendEmailToAdmin INICIADO ===");
+        logger.info("Subject: {}", subject);
+        logger.info("Content length: {} caracteres", content != null ? content.length() : 0);
+        logger.info("mailtrapClient é null: {}", mailtrapClient == null);
+        logger.info("mailtrapApiToken está vazio: {}", 
             mailtrapApiToken == null || mailtrapApiToken.isBlank());
-        logger.debug("adminEmail: {}", adminEmail);
+        logger.info("adminEmail: {}", adminEmail);
 
         if (mailtrapClient == null) {
             if (mailtrapApiToken == null || mailtrapApiToken.isBlank() || mailtrapInboxId == null) {
@@ -147,7 +147,7 @@ public class EmailNotificationGatewayImpl implements EmailNotificationGateway {
         }
 
         try {
-            logger.debug("Construindo objeto MailtrapMail...");
+            logger.info("Construindo objeto MailtrapMail...");
             // Seguindo o padrão do exemplo oficial do Mailtrap
             final MailtrapMail mail = MailtrapMail.builder()
                     .from(new Address("noreply@feedback-sync.com", "Feedback Sync"))
@@ -157,9 +157,23 @@ public class EmailNotificationGatewayImpl implements EmailNotificationGateway {
                     .category("Notificações")
                     .build();
 
-            logger.debug("Enviando email via Mailtrap API...");
-            mailtrapClient.send(mail);
-            logger.info("✓ Email enviado com sucesso para {}", adminEmail);
+            logger.info("Enviando email via Mailtrap API...");
+            logger.info("Detalhes do email:");
+            logger.info("  - De: {} ({})", mail.getFrom().getEmail(), mail.getFrom().getName());
+            logger.info("  - Para: {}", adminEmail);
+            logger.info("  - Assunto: {}", subject);
+            logger.info("  - Categoria: {}", mail.getCategory());
+            
+            // Capturar resposta do método send() (como no exemplo oficial)
+            logger.info("Chamando mailtrapClient.send()...");
+            Object response = mailtrapClient.send(mail);
+            logger.info("Resposta do Mailtrap API: {}", response != null ? response.toString() : "null");
+            
+            if (response != null) {
+                logger.info("✓ Email enviado com sucesso para {} - Resposta: {}", adminEmail, response);
+            } else {
+                logger.info("✓ Email enviado com sucesso para {} (sem resposta do servidor)", adminEmail);
+            }
             
         } catch (NotificationException e) {
             logger.error("✗ NotificationException ao enviar email", e);
@@ -167,6 +181,7 @@ public class EmailNotificationGatewayImpl implements EmailNotificationGateway {
         } catch (Exception e) {
             logger.error("✗ Erro inesperado ao enviar notificação para {}. Tipo: {}, Mensagem: {}", 
                 adminEmail, e.getClass().getName(), e.getMessage(), e);
+            logger.error("Stack trace completo:", e);
             throw new NotificationException("Falha ao enviar email via Mailtrap: " + e.getMessage(), e);
         }
     }

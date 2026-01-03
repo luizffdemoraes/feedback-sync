@@ -8,15 +8,21 @@
       }
     },
     "logLevel": {
-      "default": "Information",
+      "default": "Debug",
       "Host.Results": "Information",
-      "Function": "Information",
-      "Host.Aggregator": "Trace"
+      "Function": "Debug",
+      "Host.Aggregator": "Trace",
+      "Microsoft.Azure.WebJobs": "Debug"
     }
   },
   "extensionBundle": {
     "id": "Microsoft.Azure.Functions.ExtensionBundle",
     "version": "[4.*, 5.0.0)"
+  },
+  "extensions": {
+    "queues": {
+      "messageEncoding": "base64"
+    }
   },
   "queues": {
     "maxPollingInterval": "00:00:02",
