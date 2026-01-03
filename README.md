@@ -172,7 +172,8 @@ feedback-sync/
 │   │   │       │   │   └── NotificationException.java
 │   │   │       │   └── gateways/
 │   │   │       │       ├── FeedbackGateway.java
-│   │   │       │       ├── NotificationGateway.java
+│   │   │       │       ├── EmailNotificationGateway.java
+│   │   │       │       ├── QueueNotificationGateway.java
 │   │   │       │       └── ReportStorageGateway.java
 │   │   │       └── infrastructure/      # Camada de Infraestrutura
 │   │   │           ├── config/
@@ -182,10 +183,10 @@ feedback-sync/
 │   │   │           │   ├── FeedbackController.java
 │   │   │           ├── handlers/         # Azure Functions
 │   │   │           │   ├── NotifyAdminFunction.java
-│   │   │           │   ├── WeeklyReportFunction.java
-│   │   │           │   └── FeedbackDeserializer.java
+│   │   │           │   └── WeeklyReportFunction.java
 │   │   │           ├── gateways/
 │   │   │           │   ├── TableStorageFeedbackGatewayImpl.java
+│   │   │           │   ├── QueueNotificationGatewayImpl.java
 │   │   │           │   ├── EmailNotificationGatewayImpl.java
 │   │   │           │   └── BlobReportStorageGatewayImpl.java
 │   │   │           └── mappers/
@@ -226,8 +227,8 @@ O projeto segue os princípios da **Clean Architecture**, garantindo:
 #### 1. **Domain** (Núcleo)
 * **Entidades**: `Feedback`
 * **Value Objects**: `Score`, `Urgency`
-* **Interfaces (Gateways)**: `FeedbackGateway`, `NotificationGateway`, `ReportStorageGateway`
-* **Exceções de Domínio**: `FeedbackDomainException`, `NotificationException`
+* **Interfaces (Gateways)**: `FeedbackGateway`, `EmailNotificationGateway`, `QueueNotificationGateway`, `ReportStorageGateway`
+* **Exceções de Domínio**: `FeedbackDomainException`, `FeedbackPersistenceException`, `NotificationException`
 
 #### 2. **Application** (Casos de Uso)
 * **Use Cases**:
@@ -452,8 +453,8 @@ graph TB
     subgraph "Domain Layer"
         Entities[Entities<br/>Feedback]
         ValueObjects[Value Objects<br/>Score<br/>Urgency]
-        Gateways[Gateways Interfaces<br/>FeedbackGateway<br/>NotificationGateway<br/>ReportStorageGateway]
-        Exceptions[Domain Exceptions<br/>FeedbackDomainException<br/>NotificationException]
+        Gateways[Gateways Interfaces<br/>FeedbackGateway<br/>EmailNotificationGateway<br/>QueueNotificationGateway<br/>ReportStorageGateway]
+        Exceptions[Domain Exceptions<br/>FeedbackDomainException<br/>FeedbackPersistenceException<br/>NotificationException]
     end
 
     Controllers -->|usa| UseCases
@@ -483,7 +484,6 @@ graph LR
         subgraph "Business Logic"
             UC1[CreateFeedback<br/>UseCase]
             UC2[GenerateWeeklyReport<br/>UseCase]
-            UC3[NotifyAdmin<br/>UseCase]
         end
         
         subgraph "Domain Model"
@@ -494,11 +494,13 @@ graph LR
         
         subgraph "Infrastructure"
             TS[Table Storage<br/>Gateway]
-            NG[Email Notification<br/>Gateway]
+            QNG[Queue Notification<br/>Gateway]
+            ENG[Email Notification<br/>Gateway]
             BS[Blob Storage<br/>Gateway]
         end
         
         subgraph "Azure Functions"
+            NF[NotifyAdmin<br/>Function]
             WF[WeeklyReport<br/>Function]
         end
         
@@ -512,33 +514,31 @@ graph LR
     end
 
     REST --> UC1
-    REST --> UC2
     UC1 --> FB
     UC2 --> FB
-    UC3 --> FB
     FB --> SC
     FB --> UR
     UC1 --> TS
-    UC1 --> NG
-    UC1 --> QS
+    UC1 --> QNG
     UC2 --> TS
     UC2 --> BS
-    UC3 --> NG
     TS --> AST
-    NG --> MT
-    QS --> MT
+    QNG --> QS
+    QS -->|Trigger| NF
+    NF --> ENG
+    ENG --> MT
     BS --> ABS
     WF --> UC2
     REST -.-> AI
+    NF -.-> AI
     WF -.-> AI
 
     style REST fill:#4695EB,color:#fff
     style UC1 fill:#2196F3,color:#fff
     style UC2 fill:#2196F3,color:#fff
-    style UC3 fill:#2196F3,color:#fff
     style FB fill:#4CAF50,color:#fff
     style AST fill:#0078D4,color:#fff
-    style ASB fill:#0078D4,color:#fff
+    style QS fill:#0078D4,color:#fff
     style ABS fill:#0078D4,color:#fff
 ```
 
@@ -566,7 +566,7 @@ flowchart TD
     NotifyFunc -.->|Email| Mailtrap[Mailtrap<br/>Email Service]
     Mailtrap -.->|Email| Admin[Administrador<br/>recebe email]
     
-    Timer[Timer CRON<br/>Segunda 08:00] --> WeeklyFunc[WeeklyReportFunction]
+    Timer[Timer CRON<br/>0 */5 * * * *<br/>(A cada 5 min - configurável)] --> WeeklyFunc[WeeklyReportFunction]
     WeeklyFunc --> ReportUC[GenerateWeeklyReportUseCase]
     ReportUC --> Fetch[Buscar feedbacks<br/>da semana]
     Fetch --> Calc[Calcular métricas<br/>média, total, por dia, urgência]
@@ -763,7 +763,7 @@ A aplicação estará disponível em: `http://localhost:7071`
 
    ```powershell
 # Criar feedback
-   Invoke-RestMethod -Uri "http://localhost:7071/api/avaliacao" `
+   Invoke-RestMethod -Uri "http://localhost:7071/avaliacao" `
      -Method Post `
   -Body '{"descricao":"Aula excelente!","nota":9,"urgencia":"LOW"}' `
   -ContentType "application/json"
