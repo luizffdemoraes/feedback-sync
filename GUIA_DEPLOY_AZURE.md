@@ -123,84 +123,54 @@ az account set --subscription "<subscription-id>"
 
 ### Opção 1: Script Automatizado (Recomendado)
 
-Crie um script PowerShell para criar todos os recursos:
+O script `criar-recursos-azure.ps1` cria todos os recursos necessários e configura as variáveis de ambiente automaticamente.
+
+#### Uso Básico (sem Mailtrap)
 
 ```powershell
-# criar-recursos-azure.ps1
-param(
-    [Parameter(Mandatory=$true)]
-    [string]$ResourceGroupName = "feedback-rg",
-    
-    [Parameter(Mandatory=$true)]
-    [string]$Location = "brazilsouth",
-    
-    [Parameter(Mandatory=$true)]
-    [string]$Suffix  # Sufixo único para nomes (ex: "prod", "dev", seu nome)
-)
-
-$ErrorActionPreference = "Stop"
-
-Write-Host "🚀 Criando recursos Azure..." -ForegroundColor Green
-
-# 1. Criar Resource Group
-Write-Host "`n📦 Criando Resource Group..." -ForegroundColor Yellow
-az group create --name $ResourceGroupName --location $Location
-
-# 2. Criar Storage Account
-$storageAccountName = "feedbackstorage$Suffix".ToLower()
-Write-Host "`n💾 Criando Storage Account: $storageAccountName" -ForegroundColor Yellow
-az storage account create `
-    --name $storageAccountName `
-    --resource-group $ResourceGroupName `
-    --location $Location `
-    --sku Standard_LRS `
-    --kind StorageV2 `
-    --allow-blob-public-access false
-
-# Obter connection string do Storage
-$storageConnectionString = az storage account show-connection-string `
-    --name $storageAccountName `
-    --resource-group $ResourceGroupName `
-    --query connectionString -o tsv
-
-# Criar container para relatórios
-az storage container create `
-    --name "weekly-reports" `
-    --account-name $storageAccountName `
-    --connection-string $storageConnectionString `
-    --public-access off
-
-# 3. Criar Function App
-# NOTA: Service Bus foi removido para reduzir custos.
-# Notificações críticas são processadas via Azure Queue Storage (incluído no Storage Account)
-# e emails são enviados diretamente via Mailtrap.
-$functionAppName = "feedback-function-$Suffix".ToLower()
-Write-Host "`n⚡ Criando Function App: $functionAppName" -ForegroundColor Yellow
-az functionapp create `
-    --resource-group $ResourceGroupName `
-    --consumption-plan-location $Location `
-    --runtime java `
-    --runtime-version 21 `
-    --functions-version 4 `
-    --name $functionAppName `
-    --storage-account $storageAccountName `
-    --os-type Linux
-
-Write-Host "`n✅ Recursos criados com sucesso!" -ForegroundColor Green
-Write-Host "`n📋 Informações importantes:" -ForegroundColor Cyan
-Write-Host "  Storage Account: $storageAccountName" -ForegroundColor White
-Write-Host "  Function App: $functionAppName" -ForegroundColor White
-Write-Host "`n💡 Guarde estas informações para configurar as variáveis de ambiente!" -ForegroundColor Yellow
-Write-Host "`n📧 IMPORTANTE: Configure Mailtrap manualmente:" -ForegroundColor Yellow
-Write-Host "  1. Crie conta gratuita em: https://mailtrap.io" -ForegroundColor White
-Write-Host "  2. Gere API Token e obtenha Inbox ID" -ForegroundColor White
-Write-Host "  3. Configure as variáveis MAILTRAP_API_TOKEN e MAILTRAP_INBOX_ID" -ForegroundColor White
+.\scripts\criar-recursos-azure.ps1 `
+    -ResourceGroupName "feedback-rg" `
+    -Location "brazilsouth" `
+    -Suffix "prod"
 ```
 
-**Uso:**
+**Nota**: Com este uso básico, você precisará configurar o Mailtrap manualmente depois (veja instruções abaixo).
+
+#### Uso Completo (com Mailtrap - Recomendado)
+
+Para configurar tudo automaticamente, incluindo as variáveis do Mailtrap:
+
 ```powershell
-.\criar-recursos-azure.ps1 -ResourceGroupName "feedback-rg" -Location "brazilsouth" -Suffix "prod"
+.\scripts\criar-recursos-azure.ps1 `
+    -ResourceGroupName "feedback-rg" `
+    -Location "brazilsouth" `
+    -Suffix "prod" `
+    -MailtrapApiToken "seu-token-mailtrap" `
+    -MailtrapInboxId "seu-inbox-id" `
+    -AdminEmail "admin@exemplo.com"
 ```
+
+**Parâmetros do Script:**
+
+| Parâmetro | Obrigatório | Descrição | Padrão |
+|-----------|-------------|-----------|--------|
+| `ResourceGroupName` | Não | Nome do Resource Group | `feedback-rg` |
+| `Location` | Não | Região do Azure | `brazilsouth` |
+| `Suffix` | Não | Sufixo único para nomes dos recursos | `prod` |
+| `MailtrapApiToken` | Não | Token da API do Mailtrap | - |
+| `MailtrapInboxId` | Não | ID da inbox do Mailtrap | - |
+| `AdminEmail` | Não | Email do administrador | - |
+
+**⚠️ IMPORTANTE - Variáveis de Ambiente:**
+
+O script configura automaticamente:
+- ✅ `AZURE_STORAGE_CONNECTION_STRING` - Configurada automaticamente
+- ✅ `AzureWebJobsStorage` - Configurada automaticamente
+- ✅ `MAILTRAP_API_TOKEN` - Configurada apenas se `-MailtrapApiToken` for fornecido
+- ✅ `MAILTRAP_INBOX_ID` - Configurada apenas se `-MailtrapInboxId` for fornecido
+- ✅ `ADMIN_EMAIL` - Configurada apenas se `-AdminEmail` for fornecido
+
+**Se você não fornecer os parâmetros do Mailtrap**, o script criará os recursos mas mostrará instruções de como configurar manualmente depois.
 
 ### Opção 2: Criar Manualmente via Portal Azure
 
@@ -248,27 +218,41 @@ Write-Host "  - ADMIN_EMAIL: <admin@exemplo.com>" -ForegroundColor Gray
 
 ### 2. Configurar Application Settings na Function App
 
+**Se você usou o script com os parâmetros do Mailtrap**, as variáveis já estarão configuradas automaticamente. Pule para a seção de Deploy.
+
+**Se você não forneceu os parâmetros do Mailtrap**, configure manualmente:
+
+#### Opção A: Via Azure CLI (Recomendado)
+
 ```powershell
 $functionAppName = "feedback-function-<seu-sufixo>"
 $resourceGroup = "feedback-rg"
 
-# Configurar variáveis de ambiente
+# Configurar variáveis de ambiente do Mailtrap
 az functionapp config appsettings set `
     --name $functionAppName `
     --resource-group $resourceGroup `
     --settings `
-        "AZURE_STORAGE_CONNECTION_STRING=$storageConnectionString" `
-        "AzureWebJobsStorage=$storageConnectionString" `
-        "FUNCTIONS_WORKER_RUNTIME=java" `
-        "FUNCTIONS_EXTENSION_VERSION=~4" `
-        "quarkus.log.level=INFO" `
-        "app.environment=production" `
-        "azure.storage.container-name=weekly-reports" `
-        "azure.table.table-name=feedbacks" `
         "MAILTRAP_API_TOKEN=<seu-mailtrap-api-token>" `
         "MAILTRAP_INBOX_ID=<seu-mailtrap-inbox-id>" `
         "ADMIN_EMAIL=<admin@exemplo.com>"
 ```
+
+#### Opção B: Re-executar o Script com Parâmetros do Mailtrap
+
+Você pode executar o script novamente apenas para atualizar as configurações do Mailtrap (os recursos já existentes não serão recriados):
+
+```powershell
+.\scripts\criar-recursos-azure.ps1 `
+    -ResourceGroupName "feedback-rg" `
+    -Location "brazilsouth" `
+    -Suffix "prod" `
+    -MailtrapApiToken "seu-token-mailtrap" `
+    -MailtrapInboxId "seu-inbox-id" `
+    -AdminEmail "admin@exemplo.com"
+```
+
+**Nota**: O script detecta recursos existentes e apenas atualiza as configurações necessárias.
 
 ### 3. Verificar Configurações
 
@@ -441,23 +425,27 @@ az webapp log tail `
 ## 📊 Checklist de Deploy
 
 - [ ] Azure CLI instalado e logado
-- [ ] Resource Group criado
-- [ ] Storage Account criado e container `weekly-reports` criado
-- [ ] Function App criada (Java 21, Linux, Consumption)
+- [ ] Resource Group criado (via script ou manualmente)
+- [ ] Storage Account criado e container `weekly-reports` criado (via script ou manualmente)
+- [ ] Function App criada (Java 21, Linux, Consumption) (via script ou manualmente)
 - [ ] Application Settings configuradas:
-  - [ ] `AZURE_STORAGE_CONNECTION_STRING`
-  - [ ] `AzureWebJobsStorage`
-  - [ ] `MAILTRAP_API_TOKEN`
-  - [ ] `MAILTRAP_INBOX_ID`
-  - [ ] `ADMIN_EMAIL`
-  - [ ] `FUNCTIONS_WORKER_RUNTIME=java`
-  - [ ] `FUNCTIONS_EXTENSION_VERSION=~4`
+  - [ ] `AZURE_STORAGE_CONNECTION_STRING` ✅ Configurada automaticamente pelo script
+  - [ ] `AzureWebJobsStorage` ✅ Configurada automaticamente pelo script
+  - [ ] `MAILTRAP_API_TOKEN` ⚠️ Configure via parâmetro `-MailtrapApiToken` ou manualmente
+  - [ ] `MAILTRAP_INBOX_ID` ⚠️ Configure via parâmetro `-MailtrapInboxId` ou manualmente
+  - [ ] `ADMIN_EMAIL` ⚠️ Configure via parâmetro `-AdminEmail` ou manualmente
+  - [ ] `FUNCTIONS_WORKER_RUNTIME=java` ✅ Configurada automaticamente pelo script
+  - [ ] `FUNCTIONS_EXTENSION_VERSION=~4` ✅ Configurada automaticamente pelo script
 - [ ] Projeto compilado com sucesso
 - [ ] Deploy realizado
 - [ ] Function App está rodando
 - [ ] Endpoint `/api/avaliacao` responde
 - [ ] Health check `/health` responde
 - [ ] Logs estão sendo gerados
+
+**Legenda:**
+- ✅ Configurado automaticamente pelo script `criar-recursos-azure.ps1`
+- ⚠️ Requer configuração manual ou via parâmetros do script
 
 ---
 
