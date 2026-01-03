@@ -37,31 +37,61 @@ public class EmailNotificationGatewayImpl implements EmailNotificationGateway {
     private final Long mailtrapInboxId;
     private MailtrapClient mailtrapClient;
 
+    /**
+     * Construtor para CDI (produção).
+     * Usa @ConfigProperty para injetar valores de configuração.
+     */
     @Inject
     public EmailNotificationGatewayImpl(
             @ConfigProperty(name = "mailtrap.api-token") String mailtrapApiToken,
             @ConfigProperty(name = "admin.email") String adminEmail,
             @ConfigProperty(name = "mailtrap.inbox-id") String mailtrapInboxIdStr) {
+        this(mailtrapApiToken, adminEmail, parseInboxId(mailtrapInboxIdStr));
+    }
+
+    /**
+     * Construtor público para testes e criação manual.
+     * Permite criar instâncias sem depender de CDI.
+     * 
+     * @param mailtrapApiToken Token da API do Mailtrap
+     * @param adminEmail Email do administrador
+     * @param mailtrapInboxId ID da inbox do Mailtrap (pode ser null)
+     */
+    public EmailNotificationGatewayImpl(
+            String mailtrapApiToken,
+            String adminEmail,
+            Long mailtrapInboxId) {
         this.mailtrapApiToken = mailtrapApiToken;
         this.adminEmail = adminEmail;
-        // Converter String para Long manualmente para garantir que funciona
-        this.mailtrapInboxId = parseInboxId(mailtrapInboxIdStr);
+        this.mailtrapInboxId = mailtrapInboxId;
     }
     
     /**
      * Converte a string do inbox ID para Long.
      * Retorna null se não estiver configurado ou inválido.
+     * Método estático para permitir uso no construtor CDI.
      */
-    private Long parseInboxId(String inboxIdStr) {
+    private static Long parseInboxId(String inboxIdStr) {
         if (inboxIdStr == null || inboxIdStr.isBlank()) {
             return null;
         }
         try {
             return Long.parseLong(inboxIdStr.trim());
         } catch (NumberFormatException e) {
-            logger.warn("⚠ Valor inválido para MAILTRAP_INBOX_ID: '{}'. Deve ser um número.", inboxIdStr);
+            LoggerFactory.getLogger(EmailNotificationGatewayImpl.class)
+                .warn("⚠ Valor inválido para MAILTRAP_INBOX_ID: '{}'. Deve ser um número.", inboxIdStr);
             return null;
         }
+    }
+
+    /**
+     * Define o cliente Mailtrap.
+     * Método package-private para permitir injeção em testes sem usar reflection.
+     * 
+     * @param mailtrapClient Cliente Mailtrap a ser usado
+     */
+    void setMailtrapClient(MailtrapClient mailtrapClient) {
+        this.mailtrapClient = mailtrapClient;
     }
 
     @PostConstruct

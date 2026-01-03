@@ -8,11 +8,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.lang.reflect.Field;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -25,29 +22,24 @@ class EmailNotificationGatewayImplTest {
     @Mock
     private MailtrapClient mailtrapClient;
 
-    @InjectMocks
     private EmailNotificationGatewayImpl gateway;
-
     private String mailtrapApiToken;
     private String adminEmail;
+    private Long mailtrapInboxId;
 
     @BeforeEach
-    void setUp() throws Exception {
+    void setUp() {
         mailtrapApiToken = "test-api-token";
         adminEmail = "admin@test.com";
+        mailtrapInboxId = 12345L;
 
-        // Injetar valores via reflection
-        Field apiTokenField = EmailNotificationGatewayImpl.class.getDeclaredField("mailtrapApiToken");
-        apiTokenField.setAccessible(true);
-        apiTokenField.set(gateway, mailtrapApiToken);
+        gateway = new EmailNotificationGatewayImpl(
+            mailtrapApiToken,
+            adminEmail,
+            mailtrapInboxId
+        );
 
-        Field adminEmailField = EmailNotificationGatewayImpl.class.getDeclaredField("adminEmail");
-        adminEmailField.setAccessible(true);
-        adminEmailField.set(gateway, adminEmail);
-
-        Field mailtrapClientField = EmailNotificationGatewayImpl.class.getDeclaredField("mailtrapClient");
-        mailtrapClientField.setAccessible(true);
-        mailtrapClientField.set(gateway, mailtrapClient);
+        gateway.setMailtrapClient(mailtrapClient);
     }
 
     @Test
@@ -55,7 +47,6 @@ class EmailNotificationGatewayImplTest {
     void deveEnviarNotificacaoComSucesso() {
         String message = "Mensagem de teste";
         
-        // O método send() retorna um objeto, não é void
         when(mailtrapClient.send(any(MailtrapMail.class))).thenReturn(null);
 
         assertDoesNotThrow(() -> gateway.sendAdminNotification(message));
@@ -67,11 +58,9 @@ class EmailNotificationGatewayImplTest {
         assertNotNull(mail);
         assertEquals("ALERTA: Feedback Crítico Recebido", mail.getSubject());
         assertEquals(message, mail.getText());
-        // Validar email remetente fixo
         assertNotNull(mail.getFrom());
         assertEquals("noreply@feedback-sync.com", mail.getFrom().getEmail());
         assertEquals("Feedback Sync", mail.getFrom().getName());
-        // Validar destinatário
         assertNotNull(mail.getTo());
         assertEquals(1, mail.getTo().size());
         assertEquals(adminEmail, mail.getTo().get(0).getEmail());
@@ -96,49 +85,36 @@ class EmailNotificationGatewayImplTest {
 
     @Test
     @DisplayName("Deve retornar silenciosamente quando Mailtrap não está disponível e API token está vazio")
-    void deveRetornarSilenciosamenteQuandoMailtrapNaoDisponivelEApiTokenVazio() throws Exception {
+    void deveRetornarSilenciosamenteQuandoMailtrapNaoDisponivelEApiTokenVazio() {
         String message = "Mensagem de teste";
         
-        // Remover MailtrapClient
-        Field mailtrapClientField = EmailNotificationGatewayImpl.class.getDeclaredField("mailtrapClient");
-        mailtrapClientField.setAccessible(true);
-        mailtrapClientField.set(gateway, null);
+        EmailNotificationGatewayImpl gatewaySemToken = new EmailNotificationGatewayImpl(
+            "",
+            adminEmail,
+            (Long) null
+        );
+        gatewaySemToken.setMailtrapClient(null);
 
-        // API token vazio
-        Field apiTokenField = EmailNotificationGatewayImpl.class.getDeclaredField("mailtrapApiToken");
-        apiTokenField.setAccessible(true);
-        apiTokenField.set(gateway, "");
-
-        assertDoesNotThrow(() -> gateway.sendAdminNotification(message));
-        verify(mailtrapClient, never()).send(any(MailtrapMail.class));
+        assertDoesNotThrow(() -> gatewaySemToken.sendAdminNotification(message));
     }
 
     @Test
     @DisplayName("Deve lançar NotificationException quando Mailtrap não está disponível mas API token e Inbox ID estão configurados")
-    void deveLancarNotificationExceptionQuandoMailtrapNaoDisponivelMasApiTokenConfigurado() throws Exception {
+    void deveLancarNotificationExceptionQuandoMailtrapNaoDisponivelMasApiTokenConfigurado() {
         String message = "Mensagem de teste";
         
-        // Configurar mailtrapInboxId também (necessário para que o código tente reinicializar)
-        Field inboxIdField = EmailNotificationGatewayImpl.class.getDeclaredField("mailtrapInboxId");
-        inboxIdField.setAccessible(true);
-        inboxIdField.set(gateway, 12345L); // Configurar um inbox ID válido
-        
-        // Remover MailtrapClient mas manter API token e Inbox ID configurados
-        Field mailtrapClientField = EmailNotificationGatewayImpl.class.getDeclaredField("mailtrapClient");
-        mailtrapClientField.setAccessible(true);
-        mailtrapClientField.set(gateway, null);
+        EmailNotificationGatewayImpl gatewaySemCliente = new EmailNotificationGatewayImpl(
+            mailtrapApiToken,
+            adminEmail,
+            mailtrapInboxId
+        );
+        gatewaySemCliente.setMailtrapClient(null);
 
-        // O código tentará reinicializar o cliente. Se a reinicialização falhar, lançará uma exceção
-        // com mensagem "Mailtrap não está disponível e não foi possível reinicializar".
-        // Se a reinicialização funcionar mas o envio falhar (token inválido), lançará uma exceção
-        // com mensagem "Falha ao enviar email via Mailtrap".
-        // Ambos os casos são válidos para este teste, pois indicam que o Mailtrap não está funcionando corretamente.
         NotificationException exception = assertThrows(
             NotificationException.class,
-            () -> gateway.sendAdminNotification(message)
+            () -> gatewaySemCliente.sendAdminNotification(message)
         );
 
-        // Verificar que a exceção foi lançada e contém informações sobre o problema com Mailtrap
         assertNotNull(exception, "NotificationException deve ser lançada");
         assertTrue(
             exception.getMessage().contains("Mailtrap não está disponível") || 
@@ -149,17 +125,19 @@ class EmailNotificationGatewayImplTest {
 
     @Test
     @DisplayName("Deve lançar NotificationException quando email do admin não está configurado (vazio)")
-    void deveLancarNotificationExceptionQuandoEmailAdminNaoConfiguradoVazio() throws Exception {
+    void deveLancarNotificationExceptionQuandoEmailAdminNaoConfiguradoVazio() {
         String message = "Mensagem de teste";
         
-        // Remover email do admin (vazio)
-        Field adminEmailField = EmailNotificationGatewayImpl.class.getDeclaredField("adminEmail");
-        adminEmailField.setAccessible(true);
-        adminEmailField.set(gateway, "");
+        EmailNotificationGatewayImpl gatewaySemEmail = new EmailNotificationGatewayImpl(
+            mailtrapApiToken,
+            "",
+            mailtrapInboxId
+        );
+        gatewaySemEmail.setMailtrapClient(mailtrapClient);
 
         NotificationException exception = assertThrows(
             NotificationException.class,
-            () -> gateway.sendAdminNotification(message)
+            () -> gatewaySemEmail.sendAdminNotification(message)
         );
 
         assertTrue(exception.getMessage().contains("E-mail do administrador não informado"));
@@ -167,17 +145,19 @@ class EmailNotificationGatewayImplTest {
 
     @Test
     @DisplayName("Deve lançar NotificationException quando email do admin não está configurado (null)")
-    void deveLancarNotificationExceptionQuandoEmailAdminNaoConfiguradoNull() throws Exception {
+    void deveLancarNotificationExceptionQuandoEmailAdminNaoConfiguradoNull() {
         String message = "Mensagem de teste";
         
-        // Remover email do admin (null)
-        Field adminEmailField = EmailNotificationGatewayImpl.class.getDeclaredField("adminEmail");
-        adminEmailField.setAccessible(true);
-        adminEmailField.set(gateway, null);
+        EmailNotificationGatewayImpl gatewaySemEmail = new EmailNotificationGatewayImpl(
+            mailtrapApiToken,
+            null,
+            mailtrapInboxId
+        );
+        gatewaySemEmail.setMailtrapClient(mailtrapClient);
 
         NotificationException exception = assertThrows(
             NotificationException.class,
-            () -> gateway.sendAdminNotification(message)
+            () -> gatewaySemEmail.sendAdminNotification(message)
         );
 
         assertTrue(exception.getMessage().contains("E-mail do administrador não informado"));
