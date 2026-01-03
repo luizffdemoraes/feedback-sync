@@ -50,10 +50,10 @@ A aplicação requer os seguintes recursos no Azure:
 
 | Recurso | Tipo | Finalidade |
 |---------|------|------------|
-| **Storage Account** | Standard LRS | Table Storage (feedbacks) + Blob Storage (relatórios) |
-| **Service Bus** | Standard | Tópico para notificações críticas |
+| **Storage Account** | Standard LRS | Table Storage (feedbacks) + Blob Storage (relatórios) + Queue Storage (notificações) |
 | **Function App** | Consumption Plan (Linux) | Host da aplicação serverless |
 | **Resource Group** | - | Agrupa todos os recursos |
+| **Mailtrap** | Free Tier | Envio de emails para notificações críticas |
 
 ### Detalhamento dos Recursos
 
@@ -64,11 +64,12 @@ A aplicação requer os seguintes recursos no Azure:
 - **Recursos habilitados**:
   - Table Storage (para feedbacks)
   - Blob Storage (para relatórios semanais)
+  - Queue Storage (para fila de notificações críticas - fila: `critical-feedbacks`)
 
-#### 2. Service Bus
-- **Tier**: Standard
-- **Tópico**: `critical-feedbacks`
-- **Subscription**: `admin-notifications`
+#### 2. Mailtrap
+- **Tier**: Free Tier (suficiente para desenvolvimento e testes)
+- **Finalidade**: Envio de emails para notificações críticas
+- **Configuração**: Requer API Token e Inbox ID
 
 #### 3. Function App
 - **Runtime**: Java 21
@@ -169,36 +170,10 @@ az storage container create `
     --connection-string $storageConnectionString `
     --public-access off
 
-# 3. Criar Service Bus Namespace
-$serviceBusNamespace = "feedback-sb-$Suffix".ToLower()
-Write-Host "`n🚌 Criando Service Bus: $serviceBusNamespace" -ForegroundColor Yellow
-az servicebus namespace create `
-    --resource-group $ResourceGroupName `
-    --name $serviceBusNamespace `
-    --location $Location `
-    --sku Standard
-
-# Criar Tópico
-az servicebus topic create `
-    --resource-group $ResourceGroupName `
-    --namespace-name $serviceBusNamespace `
-    --name "critical-feedbacks"
-
-# Criar Subscription
-az servicebus topic subscription create `
-    --resource-group $ResourceGroupName `
-    --namespace-name $serviceBusNamespace `
-    --topic-name "critical-feedbacks" `
-    --name "admin-notifications"
-
-# Obter connection string do Service Bus
-$serviceBusConnectionString = az servicebus namespace authorization-rule keys list `
-    --resource-group $ResourceGroupName `
-    --namespace-name $serviceBusNamespace `
-    --name "RootManageSharedAccessKey" `
-    --query primaryConnectionString -o tsv
-
-# 4. Criar Function App
+# 3. Criar Function App
+# NOTA: Service Bus foi removido para reduzir custos.
+# Notificações críticas são processadas via Azure Queue Storage (incluído no Storage Account)
+# e emails são enviados diretamente via Mailtrap.
 $functionAppName = "feedback-function-$Suffix".ToLower()
 Write-Host "`n⚡ Criando Function App: $functionAppName" -ForegroundColor Yellow
 az functionapp create `
@@ -214,9 +189,12 @@ az functionapp create `
 Write-Host "`n✅ Recursos criados com sucesso!" -ForegroundColor Green
 Write-Host "`n📋 Informações importantes:" -ForegroundColor Cyan
 Write-Host "  Storage Account: $storageAccountName" -ForegroundColor White
-Write-Host "  Service Bus: $serviceBusNamespace" -ForegroundColor White
 Write-Host "  Function App: $functionAppName" -ForegroundColor White
 Write-Host "`n💡 Guarde estas informações para configurar as variáveis de ambiente!" -ForegroundColor Yellow
+Write-Host "`n📧 IMPORTANTE: Configure Mailtrap manualmente:" -ForegroundColor Yellow
+Write-Host "  1. Crie conta gratuita em: https://mailtrap.io" -ForegroundColor White
+Write-Host "  2. Gere API Token e obtenha Inbox ID" -ForegroundColor White
+Write-Host "  3. Configure as variáveis MAILTRAP_API_TOKEN e MAILTRAP_INBOX_ID" -ForegroundColor White
 ```
 
 **Uso:**
@@ -233,11 +211,10 @@ Write-Host "`n💡 Guarde estas informações para configurar as variáveis de a
    - Tipo: StorageV2
    - SKU: Standard LRS
    - Criar container `weekly-reports`
-4. **Crie Service Bus**:
-   - Namespace: `feedback-sb-<seu-sufixo>`
-   - Tier: Standard
-   - Criar tópico: `critical-feedbacks`
-   - Criar subscription: `admin-notifications`
+4. **Configure Mailtrap** (opcional para testes locais, necessário para produção):
+   - Crie conta gratuita em: https://mailtrap.io
+   - Gere API Token
+   - Obtenha Inbox ID
 5. **Crie Function App**:
    - Nome: `feedback-function-<seu-sufixo>`
    - Runtime: Java 21
@@ -260,18 +237,13 @@ $storageConnectionString = az storage account show-connection-string `
     --resource-group "feedback-rg" `
     --query connectionString -o tsv
 
-# Service Bus Connection String
-$serviceBusNamespace = "feedback-sb-<seu-sufixo>"
-$serviceBusConnectionString = az servicebus namespace authorization-rule keys list `
-    --resource-group "feedback-rg" `
-    --namespace-name $serviceBusNamespace `
-    --name "RootManageSharedAccessKey" `
-    --query primaryConnectionString -o tsv
-
 Write-Host "Storage Connection String:" -ForegroundColor Cyan
 Write-Host $storageConnectionString -ForegroundColor White
-Write-Host "`nService Bus Connection String:" -ForegroundColor Cyan
-Write-Host $serviceBusConnectionString -ForegroundColor White
+Write-Host "`n📧 Mailtrap Configuration:" -ForegroundColor Cyan
+Write-Host "  Configure manualmente no Azure Portal:" -ForegroundColor White
+Write-Host "  - MAILTRAP_API_TOKEN: <seu-token>" -ForegroundColor Gray
+Write-Host "  - MAILTRAP_INBOX_ID: <seu-inbox-id>" -ForegroundColor Gray
+Write-Host "  - ADMIN_EMAIL: <admin@exemplo.com>" -ForegroundColor Gray
 ```
 
 ### 2. Configurar Application Settings na Function App
@@ -287,15 +259,15 @@ az functionapp config appsettings set `
     --settings `
         "AZURE_STORAGE_CONNECTION_STRING=$storageConnectionString" `
         "AzureWebJobsStorage=$storageConnectionString" `
-        "AZURE_SERVICEBUS_CONNECTION_STRING=$serviceBusConnectionString" `
-        "AzureServiceBusConnection=$serviceBusConnectionString" `
         "FUNCTIONS_WORKER_RUNTIME=java" `
         "FUNCTIONS_EXTENSION_VERSION=~4" `
         "quarkus.log.level=INFO" `
         "app.environment=production" `
-        "azure.servicebus.topic-name=critical-feedbacks" `
         "azure.storage.container-name=weekly-reports" `
-        "azure.table.table-name=feedbacks"
+        "azure.table.table-name=feedbacks" `
+        "MAILTRAP_API_TOKEN=<seu-mailtrap-api-token>" `
+        "MAILTRAP_INBOX_ID=<seu-mailtrap-inbox-id>" `
+        "ADMIN_EMAIL=<admin@exemplo.com>"
 ```
 
 ### 3. Verificar Configurações
@@ -434,12 +406,20 @@ az webapp log tail `
 2. Verificar Storage Account está ativo
 3. Verificar container `weekly-reports` foi criado
 
-### Problema: Erro de conexão com Service Bus
+### Problema: Erro de conexão com Queue Storage
 
 **Solução:**
-1. Verificar `AZURE_SERVICEBUS_CONNECTION_STRING` está configurada
-2. Verificar tópico `critical-feedbacks` existe
-3. Verificar subscription `admin-notifications` existe
+1. Verificar `AZURE_STORAGE_CONNECTION_STRING` está configurada
+2. Verificar se a fila `critical-feedbacks` existe (é criada automaticamente)
+3. Verificar se o Azure Functions está processando a fila
+
+### Problema: Email não está sendo enviado
+
+**Solução:**
+1. Verificar `MAILTRAP_API_TOKEN` está configurada
+2. Verificar `MAILTRAP_INBOX_ID` está configurada
+3. Verificar `ADMIN_EMAIL` está configurada
+4. Verificar logs da NotifyAdminFunction para erros
 
 ### Problema: Functions não aparecem
 
@@ -463,13 +443,13 @@ az webapp log tail `
 - [ ] Azure CLI instalado e logado
 - [ ] Resource Group criado
 - [ ] Storage Account criado e container `weekly-reports` criado
-- [ ] Service Bus criado com tópico e subscription
 - [ ] Function App criada (Java 21, Linux, Consumption)
 - [ ] Application Settings configuradas:
   - [ ] `AZURE_STORAGE_CONNECTION_STRING`
   - [ ] `AzureWebJobsStorage`
-  - [ ] `AZURE_SERVICEBUS_CONNECTION_STRING`
-  - [ ] `AzureServiceBusConnection`
+  - [ ] `MAILTRAP_API_TOKEN`
+  - [ ] `MAILTRAP_INBOX_ID`
+  - [ ] `ADMIN_EMAIL`
   - [ ] `FUNCTIONS_WORKER_RUNTIME=java`
   - [ ] `FUNCTIONS_EXTENSION_VERSION=~4`
 - [ ] Projeto compilado com sucesso
@@ -487,7 +467,8 @@ az webapp log tail `
 - [Azure Functions Java Guide](https://docs.microsoft.com/azure/azure-functions/functions-reference-java)
 - [Quarkus Azure Functions](https://quarkus.io/guides/azure-functions-http)
 - [Azure Storage Documentation](https://docs.microsoft.com/azure/storage/)
-- [Azure Service Bus Documentation](https://docs.microsoft.com/azure/service-bus-messaging/)
+- [Azure Queue Storage Documentation](https://docs.microsoft.com/azure/storage/queues/)
+- [Mailtrap Documentation](https://mailtrap.io/docs/)
 
 ---
 
@@ -496,10 +477,10 @@ az webapp log tail `
 | Recurso | Custo Estimado (mensal) |
 |---------|------------------------|
 | Function App (Consumption) | ~$0.20 por 1M execuções |
-| Storage Account (LRS) | ~$0.018/GB |
-| Service Bus (Standard) | ~$10/mês base + $0.05 por 1M mensagens |
+| Storage Account (LRS) | ~$0.018/GB (inclui Table, Blob e Queue Storage) |
+| Mailtrap (Free Tier) | $0 (até 500 emails/mês) |
 
-**Total estimado**: ~$15-30/mês para uso moderado
+**Total estimado**: ~$5-10/mês para uso moderado (sem Service Bus, reduzindo custos significativamente)
 
 ---
 

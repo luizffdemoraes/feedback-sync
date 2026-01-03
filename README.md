@@ -102,17 +102,17 @@ O sistema implementa **duas funções serverless** seguindo o princípio de **Re
 **Fluxo:**
 1. Recebe mensagem da fila `critical-feedbacks` do Azure Queue Storage
 2. Deserializa o feedback crítico (nota ≤ 3)
-3. Envia notificação para administradores via SendGrid
+3. Envia notificação para administradores via Mailtrap
 4. Registra logs de processamento
 
 **Configuração:**
-- **Fila**: `critical-feedbacks`
+- **Fila**: `critical-feedbacks` (Azure Queue Storage)
 - **Trigger**: Automático quando mensagem é publicada na fila
-- **Integração**: Azure Queue Storage (trigger) + SendGrid (envio de emails)
+- **Integração**: Azure Queue Storage (trigger) + Mailtrap (envio de emails)
 
 **Integração com Recursos Azure:**
 - ✅ **Queue Storage** - Fila de mensagens críticas
-- ✅ **SendGrid** - Envio de emails
+- ✅ **Mailtrap** - Envio de emails
 
 ### 📈 WeeklyReportFunction
 
@@ -147,7 +147,7 @@ O sistema implementa **duas funções serverless** seguindo o princípio de **Re
 ![Quarkus](https://img.shields.io/badge/Quarkus-4695EB?style=for-the-badge&logo=quarkus&logoColor=white)
 ![Azure Functions](https://img.shields.io/badge/Azure_Functions-0062AD?style=for-the-badge&logo=azure-functions&logoColor=white)
 ![Azure Storage](https://img.shields.io/badge/Azure_Storage-0078D4?style=for-the-badge&logo=microsoft-azure&logoColor=white)
-![SendGrid](https://img.shields.io/badge/SendGrid-1A82E2?style=for-the-badge&logo=sendgrid&logoColor=white)
+![Mailtrap](https://img.shields.io/badge/Mailtrap-FFE01B?style=for-the-badge&logo=mailtrap&logoColor=black)
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
 
 ### Stack Técnica
@@ -157,7 +157,7 @@ O sistema implementa **duas funções serverless** seguindo o princípio de **Re
 * **Serverless**: Azure Functions (Consumption Plan)
 * **Persistência**: Azure Table Storage (feedbacks)
 * **Armazenamento**: Azure Blob Storage (relatórios)
-* **Notificações**: SendGrid (envio de emails)
+* **Notificações**: Mailtrap (envio de emails)
 * **Build**: Maven 3.8+
 * **Testes**: JUnit 5, Mockito, JaCoCo
 
@@ -262,7 +262,7 @@ O projeto segue os princípios da **Clean Architecture**, garantindo:
 #### 3. **Infrastructure** (Implementações)
 * **Controllers**: Endpoints REST (`FeedbackController`, `ReportController`)
 * **Handlers**: Azure Functions (`NotifyAdminFunction`, `WeeklyReportFunction`)
-* **Gateways**: Implementações concretas (Table Storage, SendGrid, Blob Storage)
+* **Gateways**: Implementações concretas (Table Storage, Queue Storage, Mailtrap, Blob Storage)
 * **Config**: Configurações (Exception Mapper, Jackson)
 
 ---
@@ -276,7 +276,8 @@ O projeto segue os princípios da **Clean Architecture**, garantindo:
 | **Function App** | Consumption Plan (Linux) | Host da aplicação serverless |
 | **Table Storage** | Standard LRS | Persistência de feedbacks |
 | **Blob Storage** | Standard LRS | Armazenamento de relatórios semanais |
-| **SendGrid** | Free Tier | Envio de emails para notificações críticas |
+| **Queue Storage** | Standard LRS | Fila de notificações críticas |
+| **Mailtrap** | Free Tier | Envio de emails para notificações críticas |
 | **Application Insights** | Monitoramento | Logs, métricas e rastreamento |
 
 ---
@@ -320,7 +321,7 @@ graph TB
     end
 
     subgraph "Notificações"
-        SendGrid[📧 SendGrid<br/>Email Service]
+        Mailtrap[📧 Mailtrap<br/>Email Service]
         Email[📧 E-mail<br/>Administradores]
     end
 
@@ -333,8 +334,8 @@ graph TB
     CreateUC -->|Salvar| TableStorage
     CreateUC -->|Se crítico| QueueStorage
     QueueStorage -->|Trigger| NotifyFunc
-    NotifyFunc --> SendGrid
-    SendGrid --> Email
+    NotifyFunc --> Mailtrap
+    Mailtrap --> Email
     
     WeeklyFunc -->|Timer CRON| ReportUC
     ReportUC -->|Buscar| TableStorage
@@ -351,7 +352,7 @@ graph TB
     style TableStorage fill:#0078D4,color:#fff
     style BlobStorage fill:#0078D4,color:#fff
     style QueueStorage fill:#0078D4,color:#fff
-    style SendGrid fill:#1A82E2,color:#fff
+    style Mailtrap fill:#FFE01B,color:#000
     style AppInsights fill:#0078D4,color:#fff
 ```
 
@@ -364,8 +365,10 @@ sequenceDiagram
     participant CreateFeedbackUseCase
     participant FeedbackGateway
     participant TableStorage
-    participant NotificationGateway
-    participant SendGrid
+    participant QueueNotificationGateway
+    participant QueueStorage
+    participant NotifyAdminFunction
+    participant Mailtrap
 
     Estudante->>FeedbackController: POST /avaliacao<br/>{descricao, nota, urgencia}
     
@@ -380,10 +383,12 @@ sequenceDiagram
     FeedbackGateway-->>CreateFeedbackUseCase: Feedback salvo
     
     alt Feedback é crítico (nota ≤ 3)
-        CreateFeedbackUseCase->>NotificationGateway: publishCritical(Feedback)
-        NotificationGateway->>SendGrid: Enviar email<br/>ao administrador
-        SendGrid-->>NotificationGateway: Email enviado
-        NotificationGateway-->>CreateFeedbackUseCase: Sucesso
+        CreateFeedbackUseCase->>QueueNotificationGateway: publishCritical(Feedback)
+        QueueNotificationGateway->>QueueStorage: Publicar na fila<br/>critical-feedbacks
+        QueueStorage-->>QueueNotificationGateway: Mensagem publicada
+        QueueStorage->>NotifyAdminFunction: Trigger automático<br/>(Queue Trigger)
+        NotifyAdminFunction->>Mailtrap: Enviar email<br/>ao administrador
+        Mailtrap-->>NotifyAdminFunction: Email enviado
     end
     
     CreateFeedbackUseCase-->>FeedbackController: FeedbackResponse(id, status)
@@ -395,21 +400,28 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant CreateFeedbackUseCase
-    participant NotificationGateway
-    participant SendGrid
+    participant QueueNotificationGateway
+    participant QueueStorage
+    participant NotifyAdminFunction
+    participant Mailtrap
     participant Admin
 
     Note over CreateFeedbackUseCase: Feedback crítico criado<br/>(nota ≤ 3)
     
-    CreateFeedbackUseCase->>NotificationGateway: publishCritical(Feedback)
+    CreateFeedbackUseCase->>QueueNotificationGateway: publishCritical(Feedback)
     
-    NotificationGateway->>NotificationGateway: Preparar conteúdo do email<br/>(descrição, urgência, data)
+    QueueNotificationGateway->>QueueStorage: Publicar mensagem na fila<br/>critical-feedbacks
+    QueueStorage-->>QueueNotificationGateway: Mensagem publicada
     
-    NotificationGateway->>SendGrid: Enviar email<br/>ao administrador
-    SendGrid->>Admin: 📧 E-mail de notificação<br/>ALERTA: Feedback Crítico
+    QueueStorage->>NotifyAdminFunction: Trigger automático<br/>(Queue Trigger)
     
-    SendGrid-->>NotificationGateway: Email enviado (Status 200)
-    NotificationGateway-->>CreateFeedbackUseCase: Notificação enviada
+    NotifyAdminFunction->>NotifyAdminFunction: Deserializar feedback<br/>da mensagem
+    
+    NotifyAdminFunction->>Mailtrap: Enviar email<br/>ao administrador
+    Mailtrap->>Admin: 📧 E-mail de notificação<br/>ALERTA: Feedback Crítico
+    
+    Mailtrap-->>NotifyAdminFunction: Email enviado (Status 200)
+    NotifyAdminFunction-->>QueueStorage: Processamento concluído
 ```
 
 ### 📈 Diagrama de Sequência - Geração de Relatório Semanal
@@ -520,7 +532,8 @@ graph LR
         
         subgraph "External Services"
             AST[(Azure Table<br/>Storage)]
-            SG[SendGrid<br/>Email Service]
+            MT[Mailtrap<br/>Email Service]
+            QS[(Azure Queue<br/>Storage)]
             ABS[(Azure Blob<br/>Storage)]
             AI[Application<br/>Insights]
         end
@@ -535,11 +548,13 @@ graph LR
     FB --> UR
     UC1 --> TS
     UC1 --> NG
+    UC1 --> QS
     UC2 --> TS
     UC2 --> BS
     UC3 --> NG
     TS --> AST
-    NG --> SG
+    NG --> MT
+    QS --> MT
     BS --> ABS
     WF --> UC2
     REST -.-> AI
@@ -570,12 +585,14 @@ flowchart TD
     Save --> Check{Feedback crítico?<br/>nota ≤ 3}
     
     Check -->|Não| Success1[201 Created<br/>ID retornado]
-    Check -->|Sim| Notify[Enviar email via SendGrid<br/>ao administrador]
+    Check -->|Sim| PublishQueue[Publicar na fila<br/>critical-feedbacks]
     
-    Notify --> Success1
+    PublishQueue --> Success1
     
-    Notify -.->|Email| SendGrid[SendGrid<br/>Email Service]
-    SendGrid -.->|Email| Admin[Administrador<br/>recebe email]
+    PublishQueue -.->|Mensagem| QueueStorage[Azure Queue<br/>Storage]
+    QueueStorage -.->|Trigger| NotifyFunc[NotifyAdminFunction<br/>Queue Trigger]
+    NotifyFunc -.->|Email| Mailtrap[Mailtrap<br/>Email Service]
+    Mailtrap -.->|Email| Admin[Administrador<br/>recebe email]
     
     Timer[Timer CRON<br/>Segunda 08:00] --> WeeklyFunc[WeeklyReportFunction]
     WeeklyFunc --> ReportUC[GenerateWeeklyReportUseCase]
@@ -631,11 +648,17 @@ erDiagram
         datetime lastModified
     }
     
-    SENDGRID_EMAIL {
+    MAILTRAP_EMAIL {
         string toEmail "admin@example.com"
         string subject "ALERTA: Feedback Crítico"
         string content "JSON do feedback"
         datetime sentAt
+    }
+    
+    QUEUE_STORAGE {
+        string queueName "critical-feedbacks"
+        string message "JSON do feedback"
+        datetime enqueuedAt
     }
 ```
 
@@ -661,7 +684,7 @@ graph TB
     subgraph "Azure Resources"
         Table[(Table Storage<br/>Acesso via<br/>Connection String)]
         Blob[(Blob Storage<br/>Acesso via<br/>Connection String)]
-        SendGrid[SendGrid<br/>Acesso via<br/>API Key]
+        Mailtrap[Mailtrap<br/>Acesso via<br/>API Token]
     end
 
     subgraph "Monitoramento"
@@ -675,7 +698,7 @@ graph TB
     Controller --> ConnStrings
     ConnStrings --> Table
     ConnStrings --> Blob
-    ConnStrings --> SendGrid
+    ConnStrings --> Mailtrap
     Controller -.->|Logs| AppInsights
     AppInsights -.-> Monitor
 
@@ -696,7 +719,8 @@ graph TB
 | 📈 | Função de Relatório |
 | 📋 | Table Storage |
 | 📦 | Blob Storage |
-| 📧 | SendGrid |
+| 📬 | Queue Storage |
+| 📧 | Mailtrap |
 | 📊 | Application Insights |
 | 📧 | E-mail |
 | 👤 | Usuário/Cliente |
@@ -718,6 +742,7 @@ graph TB
 * **Network Security**: VNet integration (opcional)
 * **Monitoring**: Application Insights com alertas configurados
 * **Backup**: Retenção automática de dados no Storage
+* **Queue Storage**: Fila de mensagens para processamento assíncrono de notificações
 
 ---
 
@@ -809,7 +834,7 @@ O script irá:
 1. Criar Resource Group
 2. Criar Storage Account (Table + Blob)
 3. Criar Function App
-4. Configurar Application Settings (incluindo SendGrid API Key)
+4. Configurar Application Settings (incluindo Mailtrap API Token e Inbox ID)
 6. Fazer deploy da aplicação
 
 ### Deploy Manual
@@ -838,10 +863,10 @@ Consulte o guia completo: **[GUIA_DEPLOY_AZURE.md](./GUIA_DEPLOY_AZURE.md)**
 ```properties
 # Application Settings (Azure Portal)
 AZURE_STORAGE_CONNECTION_STRING=<connection-string>
-SENDGRID_API_KEY=<your-sendgrid-api-key>
-ADMIN_EMAIL=<admin@example.com>
-SENDGRID_FROM_EMAIL=<noreply@feedback-sync.com>
 AzureWebJobsStorage=<storage-connection-string>
+MAILTRAP_API_TOKEN=<your-mailtrap-api-token>
+MAILTRAP_INBOX_ID=<your-mailtrap-inbox-id>
+ADMIN_EMAIL=<admin@example.com>
 ```
 
 ---
@@ -1014,7 +1039,7 @@ Content-Type: application/json
 | **Responsabilidade Única** | ✅ | Cada função tem responsabilidade específica |
 | **Deploy Automatizado** | ✅ | Script PowerShell + Azure Functions Maven Plugin |
 | **Monitoramento** | ✅ | Application Insights + Azure Monitor |
-| **Notificações Automáticas** | ✅ | SendGrid (envio direto de email) |
+| **Notificações Automáticas** | ✅ | Azure Queue Storage + Mailtrap (processamento assíncrono de emails) |
 | **Relatório Semanal** | ✅ | Timer Trigger + WeeklyReportFunction |
 | **Segurança** | ✅ | Connection Strings criptografadas, HTTPS |
 | **Governança** | ✅ | Resource Groups, Tags, Policies |
@@ -1050,7 +1075,8 @@ Content-Type: application/json
 
 | Evento | Gateway | Serviço | Ação |
 |--------|---------|---------|------|
-| **Feedback Crítico** | EmailNotificationGateway | SendGrid | Envia email diretamente ao administrador |
+| **Feedback Crítico** | QueueNotificationGateway | Azure Queue Storage | Publica mensagem na fila `critical-feedbacks` |
+| **Processamento da Fila** | NotifyAdminFunction | Mailtrap | Processa mensagem da fila e envia email ao administrador |
 
 ---
 

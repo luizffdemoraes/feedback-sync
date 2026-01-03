@@ -240,7 +240,7 @@ Invoke-RestMethod -Uri "http://localhost:7071/relatorio" `
 ```
 [2026-01-02T...] Executing 'Functions.notifyAdmin' (Reason='New queue message detected on 'critical-feedbacks'.', Id=...)
 [2026-01-02T...] Processando feedback crítico - ID: xxx, Nota: 2
-[2026-01-02T...] Email enviado com sucesso para seu-email@exemplo.com
+[2026-01-02T...] Email enviado com sucesso via Mailtrap para seu-email@exemplo.com
 [2026-01-02T...] Executed 'Functions.notifyAdmin' (Succeeded, Id=...)
 ```
 
@@ -366,8 +366,10 @@ docker info
 **Solução:**
 1. Verifique se o Azure Functions está rodando (necessário para Queue Triggers)
 2. Verifique se `MAILTRAP_API_TOKEN` está configurado
-3. Verifique se `ADMIN_EMAIL` está configurado
-4. Verifique os logs para erros do Mailtrap
+3. Verifique se `MAILTRAP_INBOX_ID` está configurado
+4. Verifique se `ADMIN_EMAIL` está configurado
+5. Verifique os logs para erros do Mailtrap
+6. Verifique se a mensagem foi publicada na fila `critical-feedbacks`
 
 ---
 

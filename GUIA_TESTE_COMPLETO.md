@@ -113,8 +113,9 @@ Invoke-RestMethod -Uri "http://localhost:7071/api/avaliacao" `
 
 **O que deve acontecer:**
 1. ✅ Feedback é salvo no Table Storage (Azurite)
-2. ✅ Notificação é enviada via SendGrid (porque nota ≤ 3)
-3. ✅ Email é enviado diretamente ao administrador
+2. ✅ Mensagem é publicada na fila `critical-feedbacks` (Azure Queue Storage)
+3. ✅ NotifyAdminFunction processa a mensagem automaticamente (se Azure Functions estiver rodando)
+4. ✅ Email é enviado via Mailtrap ao administrador
 
 #### Teste 3: Validação - Nota Inválida
 ```powershell
@@ -139,8 +140,8 @@ Os dados são salvos no Azurite (Table Storage). Você pode verificar através d
 No terminal onde a aplicação está rodando, você deve ver:
 - `Feedback processado com sucesso`
 - `Notificação crítica enviada por email` (para notas ≤ 3)
-- `Email enviado com sucesso para: [admin email]` (se SendGrid estiver configurado)
-- `SendGrid API Key não configurada` (se não estiver configurado - apenas em desenvolvimento)
+- `Email enviado com sucesso para: [admin email]` (se Mailtrap estiver configurado e Azure Functions rodando)
+- `Mailtrap API Token não configurado` (se não estiver configurado - apenas em desenvolvimento)
 
 ### Verificar logs dos containers
 
@@ -186,7 +187,7 @@ Invoke-RestMethod -Uri "http://localhost:7071/api/avaliacao" -Method Post -Body 
 - [ ] Aplicação iniciou sem erros (terminal mostra "Listening on: http://localhost:7071")
 - [ ] Endpoint `/api/avaliacao` responde
 - [ ] Feedback normal é salvo no Table Storage
-- [ ] Feedback crítico (nota ≤ 3) dispara notificação via SendGrid
+- [ ] Feedback crítico (nota ≤ 3) publica mensagem na fila e dispara notificação via Mailtrap
 - [ ] Logs da aplicação mostram as operações
 
 ---
