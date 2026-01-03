@@ -17,6 +17,11 @@
         <skipITs>true</skipITs>
         <surefire-plugin.version>3.5.4</surefire-plugin.version>
         <jacoco.version>0.8.12</jacoco.version>
+        <!-- Propriedades padrão para Azure Functions - podem ser sobrescritas via parâmetros -->
+        <functionAppName>feedback-function-prod</functionAppName>
+        <functionAppResourceGroup>feedback-rg</functionAppResourceGroup>
+        <region>northcentralus</region>
+        <appServicePlanName></appServicePlanName>
     </properties>
 
     <dependencyManagement>
@@ -244,9 +249,13 @@
                 </executions>
 
                 <configuration>
-                    <resourceGroup>java-functions-group</resourceGroup>
-                    <appName>feedback-service-app</appName>
-                    <region>brazilsouth</region>
+                    <!-- Valores padrão - podem ser sobrescritos via parâmetros do Maven -->
+                    <resourceGroup>${functionAppResourceGroup}</resourceGroup>
+                    <appName>${functionAppName}</appName>
+                    <region>${region}</region>
+                    <!-- App Service Plan - se especificado, o plugin usará o existente -->
+                    <appServicePlanName>${appServicePlanName}</appServicePlanName>
+                    <!-- Nota: Storage Account não precisa ser especificado - a Function App já está configurada -->
                     <runtime>
                         <os>linux</os>
                         <javaVersion>21</javaVersion>

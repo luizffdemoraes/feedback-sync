@@ -8,17 +8,22 @@
 # - Azure CLI instalado e logado (az login)
 # - Function App já criada (use criar-recursos-azure.ps1 primeiro)
 # - Maven instalado
+# 
+# Uso:
+#   .\scripts\implantar-azure.ps1
+#   .\scripts\implantar-azure.ps1 -SkipBuild
+#   .\scripts\implantar-azure.ps1 -FunctionAppName "feedback-function-prod" -ResourceGroup "feedback-rg"
 # ============================================
 
 param(
-    [Parameter(Mandatory=$true)]
-    [string]$FunctionAppName,  # Nome da Function App (ex: feedback-function-prod)
-    
-    [Parameter(Mandatory=$true)]
-    [string]$ResourceGroup,  # Nome do Resource Group (ex: feedback-rg)
+    [Parameter(Mandatory=$false)]
+    [string]$FunctionAppName,  # Nome da Function App (padrão: descobre automaticamente)
     
     [Parameter(Mandatory=$false)]
-    [switch]$SkipBuild = $false  # Se $true, pula a compilação (usa build existente)
+    [string]$ResourceGroup,  # Nome do Resource Group (padrão: "feedback-rg")
+    
+    [Parameter(Mandatory=$false)]
+    [switch]$SkipBuild  # Se presente, pula a compilação (usa build existente)
 )
 
 Write-Host ""
@@ -27,33 +32,144 @@ Write-Host "  Deploy para Azure Functions - Feedback Sync" -ForegroundColor Cyan
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host ""
 
+# Mudar para o diretório raiz do projeto (onde está o pom.xml)
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$projectRoot = Split-Path -Parent $scriptDir
+Push-Location $projectRoot
+Write-Host "Diretorio do projeto: $projectRoot" -ForegroundColor Gray
+Write-Host ""
+
+# Função helper para sair e voltar ao diretório original
+function Exit-Script {
+    param([int]$ExitCode = 0)
+    Pop-Location
+    exit $ExitCode
+}
+
 # Verificar se Azure CLI está instalado
 if (-not (Get-Command az -ErrorAction SilentlyContinue)) {
-    Write-Host "❌ Azure CLI não encontrado. Instale em: https://aka.ms/installazurecliwindows" -ForegroundColor Red
-    exit 1
+    Write-Host "[ERRO] Azure CLI nao encontrado. Instale em: https://aka.ms/installazurecliwindows" -ForegroundColor Red
+    Exit-Script 1
 }
 
 # Verificar se está logado
 $azAccount = az account show 2>&1
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "❌ Não está logado no Azure. Execute: az login" -ForegroundColor Red
-    exit 1
+    Write-Host "[ERRO] Nao esta logado no Azure. Execute: az login" -ForegroundColor Red
+    Exit-Script 1
 }
 
-Write-Host "✅ Azure CLI verificado" -ForegroundColor Green
+Write-Host "[OK] Azure CLI verificado" -ForegroundColor Green
 $subscriptionName = az account show --query name -o tsv
 Write-Host "   Subscription: $subscriptionName" -ForegroundColor Gray
 Write-Host ""
 
+# Descobrir Resource Group automaticamente se não fornecido
+if ([string]::IsNullOrWhiteSpace($ResourceGroup)) {
+    Write-Host "Descobrindo Resource Group automaticamente..." -ForegroundColor Yellow
+    
+    # Tentar o padrão primeiro
+    $defaultRg = "feedback-rg"
+    $rgExists = az group exists --name $defaultRg 2>&1
+    if ($rgExists -eq "true") {
+        $ResourceGroup = $defaultRg
+        Write-Host "   [OK] Usando Resource Group padrao: $ResourceGroup" -ForegroundColor Green
+    } else {
+        # Procurar por Resource Groups que começam com "feedback"
+        Write-Host "   Procurando Resource Groups com padrao 'feedback'..." -ForegroundColor Gray
+        $oldErrorAction = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        $rgs = az group list --query "[?starts_with(name, 'feedback')].name" -o tsv 2>&1
+        $ErrorActionPreference = $oldErrorAction
+        
+        if ($LASTEXITCODE -eq 0 -and $rgs -and -not ($rgs -match "ERROR")) {
+            $rgsArray = $rgs -split "`n" | Where-Object { $_.Trim() -ne "" }
+            if ($rgsArray.Count -gt 0) {
+                $ResourceGroup = $rgsArray[0].Trim()
+                Write-Host "   [OK] Encontrado Resource Group: $ResourceGroup" -ForegroundColor Green
+            } else {
+                Write-Host "[ERRO] Nenhum Resource Group encontrado." -ForegroundColor Red
+                Write-Host "   Execute primeiro: .\scripts\criar-recursos-azure.ps1" -ForegroundColor Yellow
+                Exit-Script 1
+            }
+        } else {
+            Write-Host "[ERRO] Nao foi possivel descobrir Resource Group automaticamente." -ForegroundColor Red
+            Write-Host "   Execute primeiro: .\scripts\criar-recursos-azure.ps1" -ForegroundColor Yellow
+            Write-Host "   Ou informe manualmente: .\scripts\implantar-azure.ps1 -ResourceGroup `"feedback-rg`"" -ForegroundColor Gray
+            Exit-Script 1
+        }
+    }
+}
+
 # Verificar se Resource Group existe
-Write-Host "🔍 Verificando recursos..." -ForegroundColor Yellow
+Write-Host "Verificando recursos..." -ForegroundColor Yellow
 $rgExists = az group exists --name $ResourceGroup 2>&1
 if ($rgExists -eq "false") {
-    Write-Host "❌ Resource Group '$ResourceGroup' não encontrado." -ForegroundColor Red
+    Write-Host "[ERRO] Resource Group '$ResourceGroup' nao encontrado." -ForegroundColor Red
     Write-Host "   Execute primeiro: .\scripts\criar-recursos-azure.ps1" -ForegroundColor Yellow
-    exit 1
+    Exit-Script 1
 }
-Write-Host "   ✅ Resource Group encontrado" -ForegroundColor Green
+Write-Host "   [OK] Resource Group encontrado: $ResourceGroup" -ForegroundColor Green
+
+# Descobrir Function App automaticamente se não fornecido
+if ([string]::IsNullOrWhiteSpace($FunctionAppName)) {
+    Write-Host "Descobrindo Function App automaticamente..." -ForegroundColor Yellow
+    
+    # Tentar o padrão primeiro
+    $defaultFunctionApp = "feedback-function-prod"
+    $oldErrorAction = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    $functionExists = az functionapp show --name $defaultFunctionApp --resource-group $ResourceGroup --query "name" -o tsv 2>&1
+    $ErrorActionPreference = $oldErrorAction
+    
+    if ($LASTEXITCODE -eq 0 -and $functionExists) {
+        $FunctionAppName = $defaultFunctionApp
+        Write-Host "   [OK] Usando Function App padrao: $FunctionAppName" -ForegroundColor Green
+    } else {
+        # Procurar por Function Apps no Resource Group que seguem o padrão "feedback-function-*"
+        Write-Host "   Procurando Function Apps no Resource Group '$ResourceGroup'..." -ForegroundColor Gray
+        $oldErrorAction = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        $functions = az functionapp list --resource-group $ResourceGroup --query "[?starts_with(name, 'feedback-function-')].name" -o tsv 2>&1
+        $ErrorActionPreference = $oldErrorAction
+        
+        if ($LASTEXITCODE -eq 0 -and $functions -and -not ($functions -match "ERROR")) {
+            $functionsArray = $functions -split "`n" | Where-Object { $_.Trim() -ne "" }
+            if ($functionsArray.Count -gt 0) {
+                $FunctionAppName = $functionsArray[0].Trim()
+                Write-Host "   [OK] Encontrada Function App: $FunctionAppName" -ForegroundColor Green
+            } else {
+                # Se não encontrou com o padrão, tentar qualquer Function App no Resource Group
+                Write-Host "   Nenhuma Function App com padrao 'feedback-function-*' encontrada, procurando qualquer Function App..." -ForegroundColor Gray
+                $oldErrorAction = $ErrorActionPreference
+                $ErrorActionPreference = "Continue"
+                $allFunctions = az functionapp list --resource-group $ResourceGroup --query "[].name" -o tsv 2>&1
+                $ErrorActionPreference = $oldErrorAction
+                
+                if ($LASTEXITCODE -eq 0 -and $allFunctions -and -not ($allFunctions -match "ERROR")) {
+                    $allFunctionsArray = $allFunctions -split "`n" | Where-Object { $_.Trim() -ne "" }
+                    if ($allFunctionsArray.Count -gt 0) {
+                        $FunctionAppName = $allFunctionsArray[0].Trim()
+                        Write-Host "   [OK] Encontrada Function App: $FunctionAppName" -ForegroundColor Green
+                    } else {
+                        Write-Host "[ERRO] Nenhuma Function App encontrada no Resource Group '$ResourceGroup'." -ForegroundColor Red
+                        Write-Host "   Execute primeiro: .\scripts\criar-recursos-azure.ps1" -ForegroundColor Yellow
+                        Exit-Script 1
+                    }
+                } else {
+                    Write-Host "[ERRO] Nenhuma Function App encontrada no Resource Group '$ResourceGroup'." -ForegroundColor Red
+                    Write-Host "   Execute primeiro: .\scripts\criar-recursos-azure.ps1" -ForegroundColor Yellow
+                    Exit-Script 1
+                }
+            }
+        } else {
+            Write-Host "[ERRO] Nao foi possivel descobrir Function App automaticamente." -ForegroundColor Red
+            Write-Host "   Execute primeiro: .\scripts\criar-recursos-azure.ps1" -ForegroundColor Yellow
+            Write-Host "   Ou informe manualmente: .\scripts\implantar-azure.ps1 -FunctionAppName `"feedback-function-prod`"" -ForegroundColor Gray
+            Exit-Script 1
+        }
+    }
+}
 
 # Verificar se Function App existe
 $oldErrorAction = $ErrorActionPreference
@@ -62,84 +178,153 @@ $functionExists = az functionapp show --name $FunctionAppName --resource-group $
 $ErrorActionPreference = $oldErrorAction
 
 if ($LASTEXITCODE -ne 0 -or -not $functionExists) {
-    Write-Host "❌ Function App '$FunctionAppName' não encontrada no Resource Group '$ResourceGroup'." -ForegroundColor Red
+    Write-Host "[ERRO] Function App '$FunctionAppName' nao encontrada no Resource Group '$ResourceGroup'." -ForegroundColor Red
     Write-Host "   Execute primeiro: .\scripts\criar-recursos-azure.ps1" -ForegroundColor Yellow
-    Write-Host ""
-    Write-Host "   Ou use os parâmetros corretos:" -ForegroundColor Yellow
-    Write-Host "   .\scripts\implantar-azure.ps1 -FunctionAppName `"feedback-function-prod`" -ResourceGroup `"feedback-rg`"" -ForegroundColor Gray
-    exit 1
+    Exit-Script 1
 }
-Write-Host "   ✅ Function App encontrada" -ForegroundColor Green
+Write-Host "   [OK] Function App encontrada: $FunctionAppName" -ForegroundColor Green
+
+# Descobrir informações da Function App (região, App Service Plan e Storage Account)
+Write-Host "Obtendo informacoes da Function App..." -ForegroundColor Gray
+$oldErrorAction = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
+$functionAppInfo = az functionapp show --name $FunctionAppName --resource-group $ResourceGroup --query "{location:location, appServicePlanId:appServicePlanId}" -o json 2>&1
+$ErrorActionPreference = $oldErrorAction
+
+$functionAppLocation = "northcentralus"  # Valor padrão
+$appServicePlanName = $null
+$storageAccountName = $null
+
+if ($LASTEXITCODE -eq 0 -and $functionAppInfo) {
+    try {
+        $functionAppJson = $functionAppInfo | ConvertFrom-Json
+        $functionAppLocation = $functionAppJson.location
+        $appServicePlanId = $functionAppJson.appServicePlanId
+        
+        # Extrair nome do App Service Plan do ID
+        if ($appServicePlanId) {
+            $appServicePlanName = $appServicePlanId.Split('/')[-1]
+        }
+        
+        # Obter Storage Account do Resource Group (procurar por storage account que começa com "feedbackstorage")
+        $oldErrorAction = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        $storageAccounts = az storage account list --resource-group $ResourceGroup --query "[?starts_with(name, 'feedbackstorage')].name" -o tsv 2>&1
+        $ErrorActionPreference = $oldErrorAction
+        if ($LASTEXITCODE -eq 0 -and $storageAccounts) {
+            $storageAccountsArray = ($storageAccounts -split "`n" | Where-Object { $_ -and $_.ToString().Trim() -ne "" }) | ForEach-Object { $_.ToString().Trim() }
+            if ($storageAccountsArray.Count -gt 0) {
+                $storageAccountName = $storageAccountsArray[0]
+            }
+        }
+        
+        Write-Host "   Regiao: $functionAppLocation" -ForegroundColor Gray
+        if ($appServicePlanName) {
+            Write-Host "   App Service Plan: $appServicePlanName" -ForegroundColor Gray
+        }
+        if ($storageAccountName) {
+            Write-Host "   Storage Account: $storageAccountName" -ForegroundColor Gray
+        }
+    } catch {
+        Write-Host "   [AVISO] Erro ao processar informacoes da Function App: $_" -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "   [AVISO] Nao foi possivel obter informacoes completas da Function App" -ForegroundColor Yellow
+}
 
 # Verificar se Maven está instalado
 if (-not (Get-Command mvn -ErrorAction SilentlyContinue)) {
-    Write-Host "❌ Maven não encontrado. Instale o Maven para continuar." -ForegroundColor Red
+    Write-Host "[ERRO] Maven nao encontrado. Instale o Maven para continuar." -ForegroundColor Red
     Write-Host "   Download: https://maven.apache.org/download.cgi" -ForegroundColor Yellow
-    exit 1
+    Exit-Script 1
 }
-Write-Host "   ✅ Maven encontrado" -ForegroundColor Green
+Write-Host "   [OK] Maven encontrado" -ForegroundColor Green
 Write-Host ""
 
 # Compilar projeto (se não pular)
 if (-not $SkipBuild) {
-    Write-Host "📦 Compilando projeto..." -ForegroundColor Yellow
+    Write-Host "Compilando projeto..." -ForegroundColor Yellow
     mvn clean package -DskipTests
 
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "❌ Erro ao compilar projeto" -ForegroundColor Red
+        Write-Host "[ERRO] Erro ao compilar projeto" -ForegroundColor Red
         Write-Host "   Tente executar manualmente: mvn clean package -DskipTests" -ForegroundColor Yellow
-        exit 1
+        Exit-Script 1
     }
 
-    Write-Host "✅ Projeto compilado com sucesso" -ForegroundColor Green
-} else {
-    Write-Host "⏭️  Pulando compilação (usando build existente)" -ForegroundColor Yellow
+    Write-Host "[OK] Projeto compilado com sucesso" -ForegroundColor Green
+}
+else {
+    Write-Host "Pulando compilacao (usando build existente)" -ForegroundColor Yellow
 }
 Write-Host ""
 
 # Fazer deploy
-Write-Host "🚀 Fazendo deploy para Azure Functions..." -ForegroundColor Yellow
+Write-Host "Fazendo deploy para Azure Functions..." -ForegroundColor Yellow
 Write-Host ""
 Write-Host "Function App: $FunctionAppName" -ForegroundColor Cyan
 Write-Host "Resource Group: $ResourceGroup" -ForegroundColor Cyan
+if ($functionAppLocation) {
+    Write-Host "Regiao: $functionAppLocation" -ForegroundColor Cyan
+}
 Write-Host ""
 
-mvn azure-functions:deploy -DfunctionAppName=$FunctionAppName
+# Construir comando Maven com parâmetros
+$mavenDeployArgs = @(
+    "azure-functions:deploy",
+    "-DfunctionAppName=$FunctionAppName",
+    "-DfunctionAppResourceGroup=$ResourceGroup"
+)
+
+if ($functionAppLocation -and $functionAppLocation.Trim() -ne "") {
+    $mavenDeployArgs += "-Dregion=$functionAppLocation"
+}
+
+if ($appServicePlanName -and $appServicePlanName.Trim() -ne "") {
+    $mavenDeployArgs += "-DappServicePlanName=$appServicePlanName"
+}
+
+# Nota: storageAccount não é necessário para deploy - a Function App já está configurada com o Storage Account
+
+Write-Host "Executando: mvn $($mavenDeployArgs -join ' ')" -ForegroundColor Gray
+Write-Host ""
+
+mvn $mavenDeployArgs
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host ""
-    Write-Host "❌ Erro ao fazer deploy" -ForegroundColor Red
+    Write-Host "[ERRO] Erro ao fazer deploy" -ForegroundColor Red
     Write-Host ""
-    Write-Host "💡 Possíveis soluções:" -ForegroundColor Yellow
+    Write-Host "Possiveis solucoes:" -ForegroundColor Yellow
     Write-Host "   1. Verifique se a Function App existe:" -ForegroundColor White
     Write-Host "      az functionapp show --name $FunctionAppName --resource-group $ResourceGroup" -ForegroundColor Gray
     Write-Host ""
-    Write-Host "   2. Verifique se está logado:" -ForegroundColor White
+    Write-Host "   2. Verifique se esta logado:" -ForegroundColor White
     Write-Host "      az account show" -ForegroundColor Gray
     Write-Host ""
-    Write-Host "   3. Verifique as configurações no pom.xml" -ForegroundColor White
+    Write-Host "   3. Verifique as configuracoes no pom.xml" -ForegroundColor White
     Write-Host ""
-    exit 1
+    Exit-Script 1
 }
 
 Write-Host ""
 Write-Host "============================================================" -ForegroundColor Green
-Write-Host "✅ DEPLOY CONCLUÍDO COM SUCESSO!" -ForegroundColor Green
+Write-Host "[OK] DEPLOY CONCLUIDO COM SUCESSO!" -ForegroundColor Green
 Write-Host "============================================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "📋 Informações da aplicação:" -ForegroundColor Cyan
+Write-Host "Informacoes da aplicacao:" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Function App:" -ForegroundColor White
 Write-Host "  Nome: $FunctionAppName" -ForegroundColor Gray
 Write-Host "  URL: https://$FunctionAppName.azurewebsites.net" -ForegroundColor Gray
 Write-Host ""
-Write-Host "Endpoints disponíveis:" -ForegroundColor White
+Write-Host "Endpoints disponiveis:" -ForegroundColor White
 Write-Host "  POST https://$FunctionAppName.azurewebsites.net/api/avaliacao" -ForegroundColor Gray
 Write-Host "  GET  https://$FunctionAppName.azurewebsites.net/api/relatorio-semanal" -ForegroundColor Gray
 Write-Host ""
-Write-Host "📋 Próximos passos:" -ForegroundColor Yellow
+Write-Host "Proximos passos:" -ForegroundColor Yellow
 Write-Host "1. Verificar Application Settings no Azure Portal" -ForegroundColor White
-Write-Host "2. Testar o endpoint de avaliação:" -ForegroundColor White
+Write-Host "2. Testar o endpoint de avaliacao:" -ForegroundColor White
 Write-Host "   https://$FunctionAppName.azurewebsites.net/api/avaliacao" -ForegroundColor Gray
 Write-Host ""
 Write-Host "3. Ver logs em tempo real:" -ForegroundColor White
@@ -149,6 +334,8 @@ Write-Host "4. Ver logs no Azure Portal:" -ForegroundColor White
 $subscriptionId = az account show --query id -o tsv
 Write-Host "   https://portal.azure.com/#@/resource/subscriptions/$subscriptionId/resourceGroups/$ResourceGroup/providers/Microsoft.Web/sites/$FunctionAppName/logStream" -ForegroundColor Gray
 Write-Host ""
-Write-Host "📖 Consulte GUIA_DEPLOY_AZURE.md para mais detalhes" -ForegroundColor Cyan
+Write-Host "Consulte GUIA_DEPLOY_AZURE.md para mais detalhes" -ForegroundColor Cyan
 Write-Host ""
 
+# Voltar para o diretório original e sair com sucesso
+Exit-Script 0
