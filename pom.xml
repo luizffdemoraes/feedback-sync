@@ -94,6 +94,14 @@
             <artifactId>quarkus-rest-jackson</artifactId>
         </dependency>
 
+        <!-- Azure Functions HTTP - Necessário para expor endpoints REST na cloud -->
+        <!-- IMPORTANTE: O middleware só é aplicado a HTTP Triggers, não interfere com Queue/Timer Triggers -->
+        <!-- Comentar para execução local -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-azure-functions-http</artifactId>
+        </dependency>
+
         <!-- Health Check (SmallRye Health) -->
         <dependency>
             <groupId>io.quarkus</groupId>
