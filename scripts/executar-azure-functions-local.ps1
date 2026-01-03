@@ -168,9 +168,28 @@ if ($needsCompile) {
     
     Write-Host ""
     Write-Host "✅ Compilação concluída" -ForegroundColor Green
+    
+    # Remover function.json do QuarkusHttp (não usado na arquitetura híbrida)
+    Write-Host ""
+    Write-Host "Removendo QuarkusHttp function.json (não usado na arquitetura híbrida)..." -ForegroundColor Yellow
+    $quarkusHttpFunctionJson = Join-Path $functionsDir "QuarkusHttp\function.json"
+    if (Test-Path $quarkusHttpFunctionJson) {
+        Remove-Item -Path $quarkusHttpFunctionJson -Force
+        Write-Host "   ✅ QuarkusHttp function.json removido" -ForegroundColor Green
+    } else {
+        Write-Host "   [OK] QuarkusHttp function.json não encontrado (já removido ou não gerado)" -ForegroundColor Gray
+    }
 } else {
     Write-Host ""
     Write-Host "✅ Usando compilação existente" -ForegroundColor Green
+    
+    # Verificar e remover QuarkusHttp mesmo se não recompilou
+    $quarkusHttpFunctionJson = Join-Path $functionsDir "QuarkusHttp\function.json"
+    if (Test-Path $quarkusHttpFunctionJson) {
+        Write-Host "Removendo QuarkusHttp function.json (não usado na arquitetura híbrida)..." -ForegroundColor Yellow
+        Remove-Item -Path $quarkusHttpFunctionJson -Force
+        Write-Host "   ✅ QuarkusHttp function.json removido" -ForegroundColor Green
+    }
 }
 
 # Verificar se o diretório de output existe

@@ -2,6 +2,9 @@ package br.com.fiap.postech.feedback.domain.entities;
 
 import br.com.fiap.postech.feedback.domain.values.Score;
 import br.com.fiap.postech.feedback.domain.values.Urgency;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -20,12 +23,31 @@ public class Feedback {
     private Urgency urgency;
     private LocalDateTime createdAt;
 
+    // Construtor padrão para Jackson deserialization
+    public Feedback() {
+    }
+
     public Feedback(String description, Score score, Urgency urgency) {
         this.id = UUID.randomUUID().toString();
         this.description = description;
         this.score = score;
         this.urgency = urgency;
         this.createdAt = LocalDateTime.now();
+    }
+
+    // Construtor para deserialização JSON via Jackson
+    @JsonCreator
+    public Feedback(
+            @JsonProperty("id") String id,
+            @JsonProperty("description") String description,
+            @JsonProperty("score") Score score,
+            @JsonProperty("urgency") Urgency urgency,
+            @JsonProperty("createdAt") LocalDateTime createdAt) {
+        this.id = id;
+        this.description = description;
+        this.score = score;
+        this.urgency = urgency;
+        this.createdAt = createdAt;
     }
 
     public Feedback(String description, int scoreValue, String urgencyValue) {
@@ -60,6 +82,7 @@ public class Feedback {
         return createdAt;
     }
 
+    @JsonIgnore
     public boolean isCritical() {
         return score.isCritical();
     }

@@ -1,5 +1,8 @@
 package br.com.fiap.postech.feedback.domain.values;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import java.util.Objects;
 
 /**
@@ -16,7 +19,8 @@ public final class Urgency {
     
     private final String value;
     
-    private Urgency(String value) {
+    @JsonCreator
+    public Urgency(@JsonProperty("value") String value) {
         if (value == null || value.isBlank()) {
             this.value = "LOW";
             return;

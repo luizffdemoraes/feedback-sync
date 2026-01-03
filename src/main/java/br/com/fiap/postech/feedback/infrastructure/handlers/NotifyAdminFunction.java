@@ -4,6 +4,7 @@ import br.com.fiap.postech.feedback.domain.entities.Feedback;
 import br.com.fiap.postech.feedback.domain.gateways.EmailNotificationGateway;
 import br.com.fiap.postech.feedback.infrastructure.config.FunctionProcessingException;
 import br.com.fiap.postech.feedback.infrastructure.gateways.EmailNotificationGatewayImpl;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -27,8 +28,11 @@ import org.slf4j.LoggerFactory;
  * - Azure Queue Storage (trigger)
  * - Mailtrap (envio de emails)
  * 
- * NOTA: Esta função NÃO usa CDI/Quarkus para evitar problemas de inicialização
- * do QuarkusAzureFunctionsMiddleware. Todas as dependências são criadas manualmente.
+ * NOTA: Esta função usa apenas Azure Functions SDK nativo (sem Quarkus Azure Functions).
+ * O projeto foi configurado com arquitetura híbrida:
+ * - Quarkus apenas para endpoints REST (funciona bem)
+ * - Azure Functions nativo para Queue/Timer Triggers (evita problemas de inicialização)
+ * Todas as dependências são criadas manualmente.
  */
 public class NotifyAdminFunction {
 
@@ -170,11 +174,15 @@ public class NotifyAdminFunction {
     /**
      * Obtém ObjectMapper: cria manualmente (sem CDI).
      * Package-private para permitir mock em testes.
+     * 
+     * Configurado para ignorar propriedades desconhecidas durante a deserialização,
+     * permitindo que mensagens com campos extras (como "critical") sejam processadas.
      */
     ObjectMapper getObjectMapper() {
         logger.info("Criando ObjectMapper manualmente");
         return new ObjectMapper()
                 .registerModule(new JavaTimeModule())
-                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
     }
 }

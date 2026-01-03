@@ -1,5 +1,8 @@
 package br.com.fiap.postech.feedback.domain.values;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import java.util.Objects;
 
 /**
@@ -15,7 +18,8 @@ public final class Score {
     
     private final int value;
     
-    public Score(int value) {
+    @JsonCreator
+    public Score(@JsonProperty("value") int value) {
         if (value < MIN_SCORE || value > MAX_SCORE) {
             throw new IllegalArgumentException(
                 String.format("Score must be between %d and %d, but was %d", 
