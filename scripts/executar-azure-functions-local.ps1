@@ -222,17 +222,29 @@ if (Test-Path $localSettingsSource) {
         $localSettings | Add-Member -MemberType NoteProperty -Name "Values" -Value @{}
     }
     
+    # IMPORTANTE: Preservar todas as propriedades existentes (especialmente REPORT_SCHEDULE_CRON)
+    Write-Host "   Preservando propriedades existentes do arquivo fonte..." -ForegroundColor Gray
+    
     # Atualizar valores com variáveis de ambiente
     Write-Host "   Aplicando variáveis de ambiente ao local.settings.json..." -ForegroundColor Gray
     
     # Garantir que todas as propriedades existam antes de atribuir valores
     # Verificar e criar propriedades se não existirem
-    $propertiesToCheck = @("mailtrap.api-token", "admin.email", "mailtrap.inbox-id", "MAILTRAP_API_TOKEN", "ADMIN_EMAIL", "MAILTRAP_INBOX_ID")
+    $propertiesToCheck = @("mailtrap.api-token", "admin.email", "mailtrap.inbox-id", "MAILTRAP_API_TOKEN", "ADMIN_EMAIL", "MAILTRAP_INBOX_ID", "REPORT_SCHEDULE_CRON")
     foreach ($propName in $propertiesToCheck) {
         if (-not $localSettings.Values.PSObject.Properties[$propName]) {
             Write-Host "   Criando propriedade: $propName" -ForegroundColor Gray
             $localSettings.Values | Add-Member -MemberType NoteProperty -Name $propName -Value "" -Force
         }
+    }
+    
+    # Preservar REPORT_SCHEDULE_CRON se já existir no arquivo fonte
+    if ($localSettings.Values.PSObject.Properties["REPORT_SCHEDULE_CRON"] -and $localSettings.Values."REPORT_SCHEDULE_CRON") {
+        Write-Host "   ✅ Preservando REPORT_SCHEDULE_CRON: $($localSettings.Values.'REPORT_SCHEDULE_CRON')" -ForegroundColor Green
+    } else {
+        # Se não existir, usar o padrão de 5 minutos
+        $localSettings.Values."REPORT_SCHEDULE_CRON" = "0 */5 * * * *"
+        Write-Host "   ✅ Configurando REPORT_SCHEDULE_CRON padrão: 0 */5 * * * *" -ForegroundColor Green
     }
     
     # Atualizar valores diretamente (garantir que sejam strings)
@@ -268,6 +280,7 @@ if (Test-Path $localSettingsSource) {
     Write-Host "   ✅ mailtrap.api-token / MAILTRAP_API_TOKEN: aplicado (primeiros 8 caracteres: $($mailtrapToken.Substring(0, [Math]::Min(8, $mailtrapToken.Length)))...)" -ForegroundColor Green
     Write-Host "   ✅ admin.email / ADMIN_EMAIL: $adminEmail" -ForegroundColor Green
     Write-Host "   ✅ mailtrap.inbox-id / MAILTRAP_INBOX_ID: $mailtrapInboxId" -ForegroundColor Green
+    Write-Host "   ✅ REPORT_SCHEDULE_CRON: $($localSettings.Values.'REPORT_SCHEDULE_CRON')" -ForegroundColor Green
     
     # Verificar se os valores foram realmente salvos
     Write-Host ""
@@ -335,6 +348,7 @@ if (Test-Path $localSettingsSource) {
         "azure.table.table-name" = "feedbacks"
         APP_ENVIRONMENT = "local"
         APP_DEBUG = "true"
+        "REPORT_SCHEDULE_CRON" = "0 */5 * * * *"
     }
     
     $basicSettings = @{

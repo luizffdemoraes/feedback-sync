@@ -37,18 +37,35 @@ public class WeeklyReportFunction {
             ) String timerInfo,
             final ExecutionContext context) {
 
-        logger.info("Timer disparado para geração de relatório semanal: {}", timerInfo);
+        logger.info("═══════════════════════════════════════════════════════════");
+        logger.info("⏰ TIMER TRIGGER DISPARADO - WeeklyReportFunction");
+        logger.info("═══════════════════════════════════════════════════════════");
+        logger.info("Timer Info: {}", timerInfo);
+        logger.info("Schedule configurado: {}", System.getenv("REPORT_SCHEDULE_CRON"));
+        logger.info("Timestamp: {}", java.time.Instant.now());
+        context.getLogger().info("🔵 WeeklyReportFunction executada - " + java.time.Instant.now());
 
         try {
+            logger.info("Iniciando geração do relatório semanal...");
             var report = generateWeeklyReportUseCase.execute();
 
-            logger.info("Relatório semanal gerado com sucesso:");
+            logger.info("═══════════════════════════════════════════════════════════");
+            logger.info("✅ RELATÓRIO SEMANAL GERADO COM SUCESSO");
+            logger.info("═══════════════════════════════════════════════════════════");
             logger.info("  - Período: {} até {}", report.getPeriodoInicio(), report.getPeriodoFim());
             logger.info("  - Total de avaliações: {}", report.getTotalAvaliacoes());
             logger.info("  - Média: {}", report.getMediaAvaliacoes());
-            logger.info("  - URL do relatório: {}", report.getReportUrl());
+            logger.info("  - URL do relatório: {}", report.getReportUrl() != null ? report.getReportUrl() : "N/A (relatório vazio)");
+            
+            if (report.getTotalAvaliacoes() == 0) {
+                logger.warn("⚠️  ATENÇÃO: Nenhum feedback encontrado no período. Relatório não foi salvo no storage.");
+            }
+            
+            context.getLogger().info("✅ Relatório gerado - Total: " + report.getTotalAvaliacoes());
 
         } catch (Exception e) {
+            logger.error("❌ ERRO ao gerar relatório semanal", e);
+            context.getLogger().severe("❌ ERRO: " + e.getMessage());
             throw new RuntimeException("Falha ao gerar relatório semanal", e);
         }
     }
