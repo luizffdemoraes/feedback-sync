@@ -194,6 +194,7 @@ $ErrorActionPreference = $oldErrorAction
 $functionAppLocation = "northcentralus"  # Valor padrão
 $appServicePlanName = $null
 $storageAccountName = $null
+$isConsumptionPlan = $false  # Flag para identificar Consumption Plans
 
 if ($LASTEXITCODE -eq 0 -and $functionAppInfo) {
     try {
@@ -204,6 +205,12 @@ if ($LASTEXITCODE -eq 0 -and $functionAppInfo) {
         # Extrair nome do App Service Plan do ID
         if ($appServicePlanId) {
             $appServicePlanName = $appServicePlanId.Split('/')[-1]
+            # Verificar se é Consumption Plan (nomes contêm "Dynamic", "Consumption" ou "Y1")
+            # Consumption Plans NÃO devem ter appServicePlanName passado no deploy
+            if ($appServicePlanName -match "Dynamic|Consumption|Y1") {
+                $isConsumptionPlan = $true
+                Write-Host "   [INFO] Consumption Plan detectado - appServicePlanName nao sera usado no deploy" -ForegroundColor Gray
+            }
         }
         
         # Obter Storage Account do Resource Group (procurar por storage account que começa com "feedbackstorage")
@@ -265,35 +272,91 @@ Write-Host ""
 Write-Host "Function App: $FunctionAppName" -ForegroundColor Cyan
 Write-Host "Resource Group: $ResourceGroup" -ForegroundColor Cyan
 if ($functionAppLocation) {
-    Write-Host "Regiao: $functionAppLocation" -ForegroundColor Cyan
+    # Normalizar região para exibição
+    $normalizedRegionDisplay = $functionAppLocation -replace '\s+', '' | ForEach-Object { $_.ToLower() }
+    Write-Host "Regiao (normalizada): $normalizedRegionDisplay" -ForegroundColor Cyan
 }
 Write-Host ""
 
-# Construir comando Maven com parâmetros
-$mavenDeployArgs = @(
-    "azure-functions:deploy",
-    "-DfunctionAppName=$FunctionAppName",
-    "-DfunctionAppResourceGroup=$ResourceGroup"
-)
+# Deploy via Azure CLI (mais confiável que plugin Maven para Consumption Plans)
+# O plugin Maven 1.30.0 tem bugs conhecidos com Consumption Plans
+$deployPath = "target\azure-functions\$FunctionAppName"
+$zipPath = "$deployPath.zip"
 
-if ($functionAppLocation -and $functionAppLocation.Trim() -ne "") {
-    $mavenDeployArgs += "-Dregion=$functionAppLocation"
+# Verificar se o diretório de deploy existe
+if (-not (Test-Path $deployPath)) {
+    Write-Host "[ERRO] Diretorio de deploy nao encontrado: $deployPath" -ForegroundColor Red
+    Write-Host "   Certifique-se de que o projeto foi compilado com sucesso" -ForegroundColor Yellow
+    Exit-Script 1
 }
 
-if ($appServicePlanName -and $appServicePlanName.Trim() -ne "") {
-    $mavenDeployArgs += "-DappServicePlanName=$appServicePlanName"
+Write-Host "Criando pacote ZIP para deploy..." -ForegroundColor Yellow
+
+# Aguardar um pouco para garantir que processos Java/Maven terminem e liberem arquivos
+Write-Host "   Aguardando liberacao de arquivos..." -ForegroundColor Gray
+Start-Sleep -Seconds 2
+
+# Remover ZIP anterior se existir
+if (Test-Path $zipPath) {
+    Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
 }
 
-# Nota: storageAccount não é necessário para deploy - a Function App já está configurada com o Storage Account
+# Criar ZIP do pacote de deploy com retry em caso de arquivo em uso
+$maxRetries = 3
+$retryDelay = 2
+$zipCreated = $false
 
-Write-Host "Executando: mvn $($mavenDeployArgs -join ' ')" -ForegroundColor Gray
+for ($attempt = 1; $attempt -le $maxRetries; $attempt++) {
+    try {
+        if ($attempt -gt 1) {
+            Write-Host "   Tentativa $attempt de $maxRetries..." -ForegroundColor Yellow
+            Start-Sleep -Seconds $retryDelay
+        }
+        
+        # Usar .NET ZipFile para melhor controle e evitar problemas de arquivo em uso
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        [System.IO.Compression.ZipFile]::CreateFromDirectory($deployPath, $zipPath, [System.IO.Compression.CompressionLevel]::Optimal, $false)
+        
+        Write-Host "   [OK] Pacote ZIP criado: $zipPath" -ForegroundColor Green
+        $zipCreated = $true
+        break
+    } catch {
+        if ($attempt -eq $maxRetries) {
+            Write-Host "[ERRO] Falha ao criar pacote ZIP apos $maxRetries tentativas" -ForegroundColor Red
+            Write-Host "   Erro: $_" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "   Possiveis solucoes:" -ForegroundColor Yellow
+            Write-Host "   1. Feche qualquer processo Java/Maven que possa estar usando os arquivos" -ForegroundColor White
+            Write-Host "   2. Aguarde alguns segundos e tente novamente" -ForegroundColor White
+            Write-Host "   3. Tente criar o ZIP manualmente:" -ForegroundColor White
+            Write-Host "      Compress-Archive -Path `"$deployPath\*`" -DestinationPath `"$zipPath`" -Force" -ForegroundColor Gray
+            Exit-Script 1
+        }
+        Write-Host "   [AVISO] Tentativa $attempt falhou, aguardando..." -ForegroundColor Yellow
+    }
+}
+
+if (-not $zipCreated) {
+    Write-Host "[ERRO] Nao foi possivel criar o pacote ZIP" -ForegroundColor Red
+    Exit-Script 1
+}
+
+Write-Host ""
+Write-Host "Fazendo deploy via Azure CLI..." -ForegroundColor Yellow
+Write-Host "   Function App: $FunctionAppName" -ForegroundColor Gray
+Write-Host "   Resource Group: $ResourceGroup" -ForegroundColor Gray
+Write-Host "   Pacote: $zipPath" -ForegroundColor Gray
 Write-Host ""
 
-mvn $mavenDeployArgs
+# Fazer deploy usando Azure CLI
+az functionapp deployment source config-zip `
+    --resource-group $ResourceGroup `
+    --name $FunctionAppName `
+    --src $zipPath
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host ""
-    Write-Host "[ERRO] Erro ao fazer deploy" -ForegroundColor Red
+    Write-Host "[ERRO] Erro ao fazer deploy via Azure CLI" -ForegroundColor Red
     Write-Host ""
     Write-Host "Possiveis solucoes:" -ForegroundColor Yellow
     Write-Host "   1. Verifique se a Function App existe:" -ForegroundColor White
@@ -302,9 +365,25 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host "   2. Verifique se esta logado:" -ForegroundColor White
     Write-Host "      az account show" -ForegroundColor Gray
     Write-Host ""
-    Write-Host "   3. Verifique as configuracoes no pom.xml" -ForegroundColor White
+    Write-Host "   3. Verifique se o pacote ZIP foi criado corretamente:" -ForegroundColor White
+    Write-Host "      Test-Path $zipPath" -ForegroundColor Gray
     Write-Host ""
+    Write-Host "   4. Tente fazer deploy manualmente:" -ForegroundColor White
+    Write-Host "      az functionapp deployment source config-zip --resource-group $ResourceGroup --name $FunctionAppName --src $zipPath" -ForegroundColor Gray
+    Write-Host ""
+    
+    # Limpar ZIP em caso de erro
+    if (Test-Path $zipPath) {
+        Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
+    }
+    
     Exit-Script 1
+}
+
+# Limpar ZIP após deploy bem-sucedido
+if (Test-Path $zipPath) {
+    Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
+    Write-Host "   [OK] Arquivo ZIP temporario removido" -ForegroundColor Gray
 }
 
 Write-Host ""
