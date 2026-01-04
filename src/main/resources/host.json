@@ -36,5 +36,11 @@
     "maxRetryCount": 3,
     "delayInterval": "00:00:05"
   },
-  "functionTimeout": "00:10:00"
+  "functionTimeout": "00:10:00",
+  "http": {
+    "routePrefix": "api",
+    "maxOutstandingRequests": 200,
+    "maxConcurrentRequests": 100,
+    "dynamicThrottlesEnabled": true
+  }
 }
