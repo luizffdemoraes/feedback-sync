@@ -1,4 +1,4 @@
-package br.com.fiap.postech.feedback.domain.values;
+package br.com.fiap.postech.feedback.domain.entities;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -56,7 +56,7 @@ class UrgencyTest {
     @DisplayName("Deve retornar LOW quando valor é null")
     void deveRetornarLowQuandoValorENull() {
         Urgency urgency = Urgency.of(null);
-        assertEquals(Urgency.LOW, urgency);
+        assertEquals("LOW", urgency.getValue());
         assertTrue(urgency.isLow());
     }
 
@@ -66,17 +66,17 @@ class UrgencyTest {
         Urgency urgency1 = Urgency.of("");
         Urgency urgency2 = Urgency.of("   ");
         
-        assertEquals(Urgency.LOW, urgency1);
-        assertEquals(Urgency.LOW, urgency2);
+        assertEquals("LOW", urgency1.getValue());
+        assertEquals("LOW", urgency2.getValue());
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"INVALID", "TEST", "ABC", "123"})
+    @ValueSource(strings = {"INVALID", "CRITICAL", "URGENT", "abc", "123"})
     @DisplayName("Deve lançar exceção para valores inválidos")
-    void deveLancarExcecaoParaValoresInvalidos(String valorInvalido) {
+    void deveLancarExcecaoParaValoresInvalidos(String invalidValue) {
         IllegalArgumentException exception = assertThrows(
             IllegalArgumentException.class,
-            () -> Urgency.of(valorInvalido)
+            () -> Urgency.of(invalidValue)
         );
         
         assertTrue(exception.getMessage().contains("Urgency must be LOW, MEDIUM or HIGH"));
@@ -91,28 +91,44 @@ class UrgencyTest {
     }
 
     @Test
-    @DisplayName("Deve ser igual quando valores são iguais")
-    void deveSerIgualQuandoValoresSaoIguais() {
+    @DisplayName("Deve comparar Urgencies corretamente usando equals")
+    void deveCompararUrgenciesCorretamente() {
         Urgency urgency1 = Urgency.of("HIGH");
         Urgency urgency2 = Urgency.of("HIGH");
-        
+        Urgency urgency3 = Urgency.of("LOW");
+
         assertEquals(urgency1, urgency2);
+        assertEquals(Urgency.HIGH, urgency1);
+        assertNotEquals(urgency1, urgency3);
+    }
+
+    @Test
+    @DisplayName("Deve retornar hashCode consistente")
+    void deveRetornarHashCodeConsistente() {
+        Urgency urgency1 = Urgency.of("MEDIUM");
+        Urgency urgency2 = Urgency.of("MEDIUM");
+
         assertEquals(urgency1.hashCode(), urgency2.hashCode());
     }
 
     @Test
-    @DisplayName("Não deve ser igual quando valores são diferentes")
-    void naoDeveSerIgualQuandoValoresSaoDiferentes() {
-        Urgency urgency1 = Urgency.of("LOW");
-        Urgency urgency2 = Urgency.of("HIGH");
-        
-        assertNotEquals(urgency1, urgency2);
+    @DisplayName("Deve retornar string representando o valor")
+    void deveRetornarStringRepresentandoValor() {
+        Urgency urgency = Urgency.of("HIGH");
+        assertEquals("HIGH", urgency.toString());
     }
 
     @Test
-    @DisplayName("Deve retornar string do valor no toString")
-    void deveRetornarStringDoValorNoToString() {
-        Urgency urgency = Urgency.of("MEDIUM");
-        assertEquals("MEDIUM", urgency.toString());
+    @DisplayName("Deve criar Urgency usando construtor com valor válido")
+    void deveCriarUrgencyUsandoConstrutor() {
+        Urgency urgency = new Urgency("MEDIUM");
+        assertEquals("MEDIUM", urgency.getValue());
+    }
+
+    @Test
+    @DisplayName("Deve criar Urgency LOW usando construtor com valor null")
+    void deveCriarUrgencyLowUsandoConstrutorComNull() {
+        Urgency urgency = new Urgency(null);
+        assertEquals("LOW", urgency.getValue());
     }
 }

@@ -19,12 +19,12 @@ import java.util.List;
 /**
  * Implementação do EmailNotificationGateway usando Mailtrap para envio de emails.
  * 
- * Esta implementação é usada pela NotifyAdminFunction para enviar emails.
+ * Esta implementação é usada pelo CreateFeedbackUseCase para enviar emails diretamente.
  * 
  * Responsabilidade: Enviar emails ao admin via Mailtrap.
  * 
  * Fluxo:
- * 1. NotifyAdminFunction (Queue Trigger) → EmailNotificationGatewayImpl.sendAdminNotification()
+ * 1. CreateFeedbackUseCase (quando feedback é crítico) → EmailNotificationGatewayImpl.sendAdminNotification()
  * 2. EmailNotificationGatewayImpl → Mailtrap API → Email ao admin
  */
 @ApplicationScoped
@@ -79,7 +79,7 @@ public class EmailNotificationGatewayImpl implements EmailNotificationGateway {
             return Long.parseLong(inboxIdStr.trim());
         } catch (NumberFormatException e) {
             LoggerFactory.getLogger(EmailNotificationGatewayImpl.class)
-                .warn("⚠ Valor inválido para MAILTRAP_INBOX_ID: '{}'. Deve ser um número.", inboxIdStr);
+                .warn("AVISO: Valor invalido para MAILTRAP_INBOX_ID: '{}'. Deve ser um numero.", inboxIdStr);
             return null;
         }
     }
@@ -97,24 +97,26 @@ public class EmailNotificationGatewayImpl implements EmailNotificationGateway {
     @PostConstruct
     void init() {
         logger.info("=== Inicializando EmailNotificationGatewayImpl ===");
-        logger.debug("mailtrapApiToken configurado: {}", 
-            mailtrapApiToken != null && !mailtrapApiToken.isBlank() ? "SIM (primeiros 8 chars: " + mailtrapApiToken.substring(0, Math.min(8, mailtrapApiToken.length())) + "...)" : "NÃO");
-        logger.debug("adminEmail configurado: {}", adminEmail != null && !adminEmail.isBlank() ? adminEmail : "NÃO");
-        logger.debug("mailtrapInboxId configurado: {}", mailtrapInboxId != null ? mailtrapInboxId : "NÃO");
+        logger.info("mailtrapApiToken configurado: {}", 
+            mailtrapApiToken != null && !mailtrapApiToken.isBlank() ? "SIM (primeiros 8 chars: " + mailtrapApiToken.substring(0, Math.min(8, mailtrapApiToken.length())) + "...)" : "NAO");
+        logger.info("adminEmail configurado: {}", adminEmail != null && !adminEmail.isBlank() ? adminEmail : "NAO");
+        logger.info("mailtrapInboxId configurado: {}", mailtrapInboxId != null ? mailtrapInboxId : "NAO");
         
         if (mailtrapApiToken == null || mailtrapApiToken.isBlank()) {
-            logger.warn("⚠ Mailtrap API Token não configurado. Emails não serão enviados.");
+            logger.warn("AVISO: Mailtrap API Token nao configurado. Emails nao serao enviados.");
             return;
         }
         
         if (mailtrapInboxId == null) {
-            logger.warn("⚠ Mailtrap Inbox ID não configurado. Configure MAILTRAP_INBOX_ID. Emails não serão enviados.");
+            logger.warn("AVISO: Mailtrap Inbox ID nao configurado. Configure MAILTRAP_INBOX_ID. Emails nao serao enviados.");
             return;
         }
         
         try {
-            logger.debug("Criando configuração do Mailtrap...");
-            logger.debug("Inbox ID: {}", mailtrapInboxId);
+            logger.info("Criando configuracao do Mailtrap...");
+            logger.info("Inbox ID: {}", mailtrapInboxId);
+            logger.info("Token configurado: {}", mailtrapApiToken != null && !mailtrapApiToken.isBlank());
+            
             // Seguindo o padrão do exemplo oficial do Mailtrap
             final MailtrapConfig config = new MailtrapConfig.Builder()
                     .sandbox(true)
@@ -122,12 +124,13 @@ public class EmailNotificationGatewayImpl implements EmailNotificationGateway {
                     .token(mailtrapApiToken)
                     .build();
             
-            logger.debug("Criando cliente Mailtrap...");
+            logger.info("Criando cliente Mailtrap...");
             mailtrapClient = MailtrapClientFactory.createMailtrapClient(config);
-            logger.info("✓ Mailtrap client inicializado com sucesso");
+            logger.info("Mailtrap client inicializado com sucesso");
         } catch (Exception e) {
-            logger.error("✗ Erro ao inicializar Mailtrap. Tipo: {}, Mensagem: {}", 
+            logger.error("ERRO ao inicializar Mailtrap. Tipo: {}, Mensagem: {}", 
                 e.getClass().getName(), e.getMessage(), e);
+            logger.error("Stack trace completo:", e);
             mailtrapClient = null; // Garantir que seja null em caso de erro
         }
     }
@@ -152,27 +155,30 @@ public class EmailNotificationGatewayImpl implements EmailNotificationGateway {
 
         if (mailtrapClient == null) {
             if (mailtrapApiToken == null || mailtrapApiToken.isBlank() || mailtrapInboxId == null) {
-                logger.warn("⚠ Mailtrap não configurado completamente. Email não será enviado. Configure MAILTRAP_API_TOKEN e MAILTRAP_INBOX_ID.");
-                return; // Não falha se não estiver configurado (ambiente de desenvolvimento)
+                logger.warn("AVISO: Mailtrap nao configurado completamente. Email nao sera enviado. Configure MAILTRAP_API_TOKEN e MAILTRAP_INBOX_ID.");
+                throw new NotificationException("Mailtrap nao configurado completamente. Configure MAILTRAP_API_TOKEN e MAILTRAP_INBOX_ID.");
             }
-            logger.error("✗ Mailtrap client é null mas token está configurado. Tentando reinicializar...");
+            logger.error("ERRO: Mailtrap client e null mas token esta configurado. Tentando reinicializar...");
             // Tentar reinicializar seguindo o padrão do exemplo oficial do Mailtrap
             try {
+                logger.info("Reinicializando Mailtrap client...");
+                logger.info("Inbox ID: {}", mailtrapInboxId);
                 final MailtrapConfig config = new MailtrapConfig.Builder()
                         .sandbox(true)
                         .inboxId(mailtrapInboxId)
                         .token(mailtrapApiToken)
                         .build();
                 mailtrapClient = MailtrapClientFactory.createMailtrapClient(config);
-                logger.info("✓ Mailtrap client reinicializado com sucesso");
+                logger.info("Mailtrap client reinicializado com sucesso");
             } catch (Exception e) {
-                logger.error("✗ Falha ao reinicializar Mailtrap client", e);
-                throw new NotificationException("Mailtrap não está disponível e não foi possível reinicializar: " + e.getMessage(), e);
+                logger.error("ERRO: Falha ao reinicializar Mailtrap client", e);
+                logger.error("Stack trace completo:", e);
+                throw new NotificationException("Mailtrap nao esta disponivel e nao foi possivel reinicializar: " + e.getMessage(), e);
             }
         }
 
         if (adminEmail == null || adminEmail.isBlank()) {
-            logger.error("✗ E-mail do administrador não informado");
+            logger.error("ERRO: E-mail do administrador nao informado");
             throw new NotificationException("E-mail do administrador não informado.");
         }
 
@@ -200,16 +206,17 @@ public class EmailNotificationGatewayImpl implements EmailNotificationGateway {
             logger.info("Resposta do Mailtrap API: {}", response != null ? response.toString() : "null");
             
             if (response != null) {
-                logger.info("✓ Email enviado com sucesso para {} - Resposta: {}", adminEmail, response);
+                logger.info("Email enviado com sucesso para {} - Resposta: {}", adminEmail, response);
             } else {
-                logger.info("✓ Email enviado com sucesso para {} (sem resposta do servidor)", adminEmail);
+                logger.info("Email enviado com sucesso para {} (sem resposta do servidor)", adminEmail);
             }
             
         } catch (NotificationException e) {
-            logger.error("✗ NotificationException ao enviar email", e);
+            logger.error("ERRO: NotificationException ao enviar email", e);
+            logger.error("Stack trace completo:", e);
             throw e;
         } catch (Exception e) {
-            logger.error("✗ Erro inesperado ao enviar notificação para {}. Tipo: {}, Mensagem: {}", 
+            logger.error("ERRO: Erro inesperado ao enviar notificacao para {}. Tipo: {}, Mensagem: {}", 
                 adminEmail, e.getClass().getName(), e.getMessage(), e);
             logger.error("Stack trace completo:", e);
             throw new NotificationException("Falha ao enviar email via Mailtrap: " + e.getMessage(), e);

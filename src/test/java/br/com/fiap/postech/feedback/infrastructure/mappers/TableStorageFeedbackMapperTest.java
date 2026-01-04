@@ -1,8 +1,8 @@
 package br.com.fiap.postech.feedback.infrastructure.mappers;
 
 import br.com.fiap.postech.feedback.domain.entities.Feedback;
-import br.com.fiap.postech.feedback.domain.values.Score;
-import br.com.fiap.postech.feedback.domain.values.Urgency;
+import br.com.fiap.postech.feedback.domain.entities.Score;
+import br.com.fiap.postech.feedback.domain.entities.Urgency;
 import com.azure.data.tables.models.TableEntity;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

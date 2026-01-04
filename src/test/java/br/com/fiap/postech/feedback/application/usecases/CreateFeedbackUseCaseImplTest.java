@@ -5,8 +5,8 @@ import br.com.fiap.postech.feedback.application.dtos.responses.FeedbackResponse;
 import br.com.fiap.postech.feedback.domain.entities.Feedback;
 import br.com.fiap.postech.feedback.domain.exceptions.FeedbackDomainException;
 import br.com.fiap.postech.feedback.domain.exceptions.NotificationException;
+import br.com.fiap.postech.feedback.domain.gateways.EmailNotificationGateway;
 import br.com.fiap.postech.feedback.domain.gateways.FeedbackGateway;
-import br.com.fiap.postech.feedback.domain.gateways.QueueNotificationGateway;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -27,7 +27,7 @@ class CreateFeedbackUseCaseImplTest {
     private FeedbackGateway feedbackGateway;
 
     @Mock
-    private QueueNotificationGateway queueNotificationGateway;
+    private EmailNotificationGateway emailNotificationGateway;
 
     @InjectMocks
     private CreateFeedbackUseCaseImpl createFeedbackUseCase;
@@ -62,11 +62,11 @@ class CreateFeedbackUseCaseImplTest {
         assertNotNull(response.createdAt());
 
         verify(feedbackGateway, times(1)).save(any(Feedback.class));
-        verify(queueNotificationGateway, never()).publishCritical(any(Feedback.class));
+        verify(emailNotificationGateway, never()).sendAdminNotification(anyString());
     }
 
     @Test
-    @DisplayName("Deve criar feedback crítico e enviar notificação")
+    @DisplayName("Deve criar feedback crítico e enviar notificação por email")
     void deveCriarFeedbackCriticoEEnviarNotificacao() {
         FeedbackResponse response = createFeedbackUseCase.execute(requestCritico);
 
@@ -74,7 +74,7 @@ class CreateFeedbackUseCaseImplTest {
         assertEquals(2, response.score());
 
         verify(feedbackGateway, times(1)).save(any(Feedback.class));
-        verify(queueNotificationGateway, times(1)).publishCritical(any(Feedback.class));
+        verify(emailNotificationGateway, times(1)).sendAdminNotification(anyString());
     }
 
     @Test
@@ -147,28 +147,28 @@ class CreateFeedbackUseCaseImplTest {
     }
 
     @Test
-    @DisplayName("Não deve falhar quando notificação crítica falha")
-    void naoDeveFalharQuandoNotificacaoCriticaFalha() {
-        doThrow(new NotificationException("Erro ao enviar notificação"))
-            .when(queueNotificationGateway).publishCritical(any(Feedback.class));
+    @DisplayName("Não deve falhar quando envio de email falha")
+    void naoDeveFalharQuandoEnvioDeEmailFalha() {
+        doThrow(new NotificationException("Erro ao enviar email"))
+            .when(emailNotificationGateway).sendAdminNotification(anyString());
 
         FeedbackResponse response = createFeedbackUseCase.execute(requestCritico);
 
         assertNotNull(response);
         verify(feedbackGateway, times(1)).save(any(Feedback.class));
-        verify(queueNotificationGateway, times(1)).publishCritical(any(Feedback.class));
+        verify(emailNotificationGateway, times(1)).sendAdminNotification(anyString());
     }
 
     @Test
-    @DisplayName("Não deve falhar quando notificação crítica lança exceção genérica")
-    void naoDeveFalharQuandoNotificacaoCriticaLancaExcecaoGenerica() {
+    @DisplayName("Não deve falhar quando envio de email lança exceção genérica")
+    void naoDeveFalharQuandoEnvioDeEmailLancaExcecaoGenerica() {
         doThrow(new RuntimeException("Erro inesperado"))
-            .when(queueNotificationGateway).publishCritical(any(Feedback.class));
+            .when(emailNotificationGateway).sendAdminNotification(anyString());
 
         FeedbackResponse response = createFeedbackUseCase.execute(requestCritico);
 
         assertNotNull(response);
         verify(feedbackGateway, times(1)).save(any(Feedback.class));
-        verify(queueNotificationGateway, times(1)).publishCritical(any(Feedback.class));
+        verify(emailNotificationGateway, times(1)).sendAdminNotification(anyString());
     }
 }

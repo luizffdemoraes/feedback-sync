@@ -1,4 +1,4 @@
-package br.com.fiap.postech.feedback.domain.values;
+package br.com.fiap.postech.feedback.domain.entities;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -55,4 +55,3 @@ public final class Score {
         return String.valueOf(value);
     }
 }
-

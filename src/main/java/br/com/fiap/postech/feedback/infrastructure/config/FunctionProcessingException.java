@@ -2,7 +2,7 @@ package br.com.fiap.postech.feedback.infrastructure.config;
 
 /**
  * Exceção lançada quando ocorre erro no processamento de Azure Functions.
- * Representa falhas no processamento de mensagens de filas ou timers.
+ * Representa falhas no processamento de funções Azure (HTTP triggers, timers, etc).
  */
 public class FunctionProcessingException extends RuntimeException {
     

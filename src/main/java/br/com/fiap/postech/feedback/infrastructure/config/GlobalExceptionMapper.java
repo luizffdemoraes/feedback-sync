@@ -42,7 +42,7 @@ public class GlobalExceptionMapper implements ExceptionMapper<Exception> {
      *    Oculta detalhes técnicos e retorna mensagem genérica de erro de conexão.
      * 
      * 3. NotificationException → 500 INTERNAL_SERVER_ERROR
-     *    Mapeia erros ao publicar notificações críticas na fila Azure Queue Storage.
+     *    Mapeia erros ao enviar notificações críticas por email.
      *    Informa que o feedback foi salvo mas a notificação falhou.
      * 
      * 4. JsonProcessingException → 400 BAD_REQUEST

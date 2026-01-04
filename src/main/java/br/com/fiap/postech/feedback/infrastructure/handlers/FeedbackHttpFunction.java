@@ -4,9 +4,9 @@ import br.com.fiap.postech.feedback.application.dtos.requests.FeedbackRequest;
 import br.com.fiap.postech.feedback.application.dtos.responses.FeedbackResponse;
 import br.com.fiap.postech.feedback.application.usecases.CreateFeedbackUseCase;
 import br.com.fiap.postech.feedback.application.usecases.CreateFeedbackUseCaseImpl;
+import br.com.fiap.postech.feedback.domain.gateways.EmailNotificationGateway;
 import br.com.fiap.postech.feedback.domain.gateways.FeedbackGateway;
-import br.com.fiap.postech.feedback.domain.gateways.QueueNotificationGateway;
-import br.com.fiap.postech.feedback.infrastructure.gateways.QueueNotificationGatewayImpl;
+import br.com.fiap.postech.feedback.infrastructure.gateways.EmailNotificationGatewayImpl;
 import br.com.fiap.postech.feedback.infrastructure.gateways.TableStorageFeedbackGatewayImpl;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -25,7 +25,7 @@ import java.util.Optional;
  * Expõe o endpoint POST /api/avaliacao que recebe feedbacks de avaliação.
  * 
  * Esta função cria as dependências manualmente (sem Quarkus CDI) seguindo
- * o mesmo padrão das outras funções Azure (NotifyAdminFunction, WeeklyReportFunction).
+ * o mesmo padrão das outras funções Azure (WeeklyReportFunction).
  */
 public class FeedbackHttpFunction {
 
@@ -48,18 +48,30 @@ public class FeedbackHttpFunction {
                         logger.info("Inicializando CreateFeedbackUseCase manualmente (lazy initialization)...");
                         
                         // Obter configurações de variáveis de ambiente
-                        // No Azure Functions, variáveis com pontos podem não funcionar, então tentamos ambas as formas
+                        // IMPORTANTE: Ordem de prioridade para compatibilidade com Azure Functions:
+                        // 1. AZURE_STORAGE_CONNECTION_STRING (padrão Azure Functions)
+                        // 2. AzureWebJobsStorage (usado pelo Azure Functions runtime)
+                        // 3. azure.storage.connection-string (formato Quarkus, pode não funcionar no Azure Functions)
+                        // 4. Fallback para desenvolvimento local
                         String storageConnectionString = System.getenv("AZURE_STORAGE_CONNECTION_STRING");
-                        if (storageConnectionString == null || storageConnectionString.isBlank()) {
-                            storageConnectionString = System.getenv("azure.storage.connection-string");
-                        }
-                        // Azure Functions também pode usar AzureWebJobsStorage
                         if (storageConnectionString == null || storageConnectionString.isBlank()) {
                             storageConnectionString = System.getenv("AzureWebJobsStorage");
                         }
                         if (storageConnectionString == null || storageConnectionString.isBlank()) {
-                            logger.warn("⚠️ AZURE_STORAGE_CONNECTION_STRING não configurada! Usando valor padrão para desenvolvimento local.");
+                            storageConnectionString = System.getenv("azure.storage.connection-string");
+                        }
+                        if (storageConnectionString == null || storageConnectionString.isBlank()) {
+                            logger.warn("AVISO: AZURE_STORAGE_CONNECTION_STRING não configurada! Usando valor padrão para desenvolvimento local.");
                             storageConnectionString = "UseDevelopmentStorage=true"; // Padrão para Azurite local
+                        }
+                        
+                        // Validar se não está usando o fallback local em produção
+                        if (storageConnectionString.equals("UseDevelopmentStorage=true")) {
+                            String env = System.getenv("app.environment");
+                            if (env != null && (env.equals("production") || env.equals("prod"))) {
+                                logger.error("ERRO CRITICO: Usando connection string de desenvolvimento local em ambiente de produção!");
+                                throw new RuntimeException("AZURE_STORAGE_CONNECTION_STRING não configurada em ambiente de produção");
+                            }
                         }
                         
                         String tableName = System.getenv("azure.table.table-name");
@@ -78,14 +90,14 @@ public class FeedbackHttpFunction {
                         
                         // Criar gateways manualmente usando reflection para configurar campos privados
                         FeedbackGateway feedbackGateway = createFeedbackGateway(storageConnectionString, tableName);
-                        QueueNotificationGateway queueGateway = createQueueGateway(storageConnectionString);
+                        EmailNotificationGateway emailGateway = createEmailGateway();
                         
                         // Criar use case
-                        createFeedbackUseCase = new CreateFeedbackUseCaseImpl(feedbackGateway, queueGateway);
+                        createFeedbackUseCase = new CreateFeedbackUseCaseImpl(feedbackGateway, emailGateway);
                         
-                        logger.info("✓ CreateFeedbackUseCase inicializado com sucesso");
+                        logger.info("CreateFeedbackUseCase inicializado com sucesso");
                     } catch (Exception e) {
-                        logger.error("❌ Erro ao inicializar CreateFeedbackUseCase: {}", e.getMessage(), e);
+                        logger.error("Erro ao inicializar CreateFeedbackUseCase: {}", e.getMessage(), e);
                         throw new RuntimeException("Falha ao inicializar CreateFeedbackUseCase: " + e.getMessage(), e);
                     }
                 }
@@ -130,7 +142,7 @@ public class FeedbackHttpFunction {
             initMethod.setAccessible(true);
             initMethod.invoke(gateway);
             
-            logger.info("✓ TableStorageFeedbackGatewayImpl inicializado com sucesso");
+            logger.info("TableStorageFeedbackGatewayImpl inicializado com sucesso");
             return gateway;
         } catch (java.lang.reflect.InvocationTargetException e) {
             Throwable cause = e.getCause();
@@ -148,23 +160,67 @@ public class FeedbackHttpFunction {
         }
     }
     
-    private static QueueNotificationGateway createQueueGateway(String connectionString) {
+    private static EmailNotificationGateway createEmailGateway() {
         try {
-            logger.info("Criando QueueNotificationGatewayImpl manualmente");
-            // QueueNotificationGatewayImpl tem construtor com @ConfigProperty, então precisamos usar reflection
-            // Criar instância vazia primeiro
-            QueueNotificationGatewayImpl gateway = new QueueNotificationGatewayImpl(connectionString, objectMapper);
+            logger.info("Criando EmailNotificationGatewayImpl manualmente");
             
-            // Chamar init() via reflection
-            java.lang.reflect.Method initMethod = QueueNotificationGatewayImpl.class.getDeclaredMethod("init");
+            // Obter variáveis de ambiente do Mailtrap
+            String mailtrapToken = System.getenv("MAILTRAP_API_TOKEN");
+            String adminEmail = System.getenv("ADMIN_EMAIL");
+            String mailtrapInboxIdStr = System.getenv("MAILTRAP_INBOX_ID");
+            
+            logger.info("  MAILTRAP_API_TOKEN configurado: {}", mailtrapToken != null && !mailtrapToken.isBlank() ? "SIM" : "NAO");
+            logger.info("  ADMIN_EMAIL configurado: {}", adminEmail != null && !adminEmail.isBlank() ? adminEmail : "NAO");
+            logger.info("  MAILTRAP_INBOX_ID configurado: {}", mailtrapInboxIdStr != null && !mailtrapInboxIdStr.isBlank() ? mailtrapInboxIdStr : "NAO");
+            
+            // Converter inbox ID de String para Long (construtor espera Long)
+            Long mailtrapInboxId = null;
+            if (mailtrapInboxIdStr != null && !mailtrapInboxIdStr.isBlank()) {
+                try {
+                    mailtrapInboxId = Long.parseLong(mailtrapInboxIdStr.trim());
+                    logger.info("  MAILTRAP_INBOX_ID convertido para Long: {}", mailtrapInboxId);
+                } catch (NumberFormatException e) {
+                    logger.error("ERRO: MAILTRAP_INBOX_ID invalido: '{}'. Deve ser um numero.", mailtrapInboxIdStr);
+                }
+            }
+            
+            // Criar gateway passando os parâmetros diretamente
+            EmailNotificationGatewayImpl gateway = new EmailNotificationGatewayImpl(mailtrapToken, adminEmail, mailtrapInboxId);
+            
+            // Inicializar manualmente chamando o método init() via reflection
+            logger.info("  Chamando init() via reflection para inicializar MailtrapClient...");
+            java.lang.reflect.Method initMethod = EmailNotificationGatewayImpl.class.getDeclaredMethod("init");
             initMethod.setAccessible(true);
             initMethod.invoke(gateway);
+            logger.info("  Método init() executado com sucesso");
             
-            logger.info("✓ QueueNotificationGatewayImpl inicializado");
+            // Verificar se mailtrapClient foi inicializado
+            java.lang.reflect.Field clientField = EmailNotificationGatewayImpl.class.getDeclaredField("mailtrapClient");
+            clientField.setAccessible(true);
+            Object mailtrapClient = clientField.get(gateway);
+            
+            if (mailtrapClient != null) {
+                logger.info("EmailNotificationGatewayImpl inicializado com sucesso - MailtrapClient criado");
+            } else {
+                logger.warn("AVISO: EmailNotificationGatewayImpl inicializado mas MailtrapClient é null");
+                logger.warn("  Isso pode acontecer se as configurações do Mailtrap não estiverem completas");
+                logger.warn("  Verifique: MAILTRAP_API_TOKEN, MAILTRAP_INBOX_ID, ADMIN_EMAIL");
+            }
+            
             return gateway;
+        } catch (java.lang.reflect.InvocationTargetException e) {
+            Throwable cause = e.getCause();
+            logger.error("Erro ao inicializar EmailNotificationGatewayImpl (InvocationTargetException)", cause != null ? cause : e);
+            logger.error("  Mensagem: {}", cause != null ? cause.getMessage() : e.getMessage());
+            if (cause != null) {
+                logger.error("  Stack trace:", cause);
+            }
+            throw new RuntimeException("Falha ao criar EmailNotificationGateway: " + (cause != null ? cause.getMessage() : e.getMessage()), cause != null ? cause : e);
         } catch (Exception e) {
-            logger.error("Erro ao criar QueueNotificationGatewayImpl", e);
-            throw new RuntimeException("Falha ao criar QueueNotificationGateway", e);
+            logger.error("Erro ao criar EmailNotificationGatewayImpl", e);
+            logger.error("  Tipo da exceção: {}", e.getClass().getName());
+            logger.error("  Mensagem: {}", e.getMessage());
+            throw new RuntimeException("Falha ao criar EmailNotificationGateway: " + e.getMessage(), e);
         }
     }
 

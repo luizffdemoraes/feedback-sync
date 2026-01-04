@@ -1,7 +1,5 @@
 package br.com.fiap.postech.feedback.domain.entities;
 
-import br.com.fiap.postech.feedback.domain.values.Score;
-import br.com.fiap.postech.feedback.domain.values.Urgency;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

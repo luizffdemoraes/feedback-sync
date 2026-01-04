@@ -112,8 +112,7 @@ Verifique se todas as variáveis estão configuradas corretamente:
 Fluxo de Feedback:
    1. Recebimento de feedback (POST /api/avaliacao): [OK]
    2. Salvamento no Table Storage: [OK]
-   3. Publicação na fila (feedbacks críticos): [OK]
-   4. Envio de email via Mailtrap: [OK]
+   3. Envio de email via Mailtrap (se crítico): [OK]
 ```
 
 **⏱️ Tempo estimado:** 10 segundos
@@ -184,6 +183,33 @@ az functionapp log tail --name feedback-function-prod --resource-group feedback-
 
 ---
 
+### **Passo 8: Verificar Logs (se email não for enviado)**
+
+Se o email não estiver sendo enviado, verifique os logs da Function App:
+
+```powershell
+az functionapp log tail --name feedback-function-prod --resource-group feedback-rg
+```
+
+**Ou acesse o portal Azure:**
+1. Acesse: https://portal.azure.com
+2. Vá para: Function App → `feedback-function-prod` → Log stream
+3. Procure por logs relacionados a:
+   - `"Feedback crítico detectado"`
+   - `"Enviando notificação por email"`
+   - `"Email enviado com sucesso"`
+   - `"ERRO"` (se houver falha)
+
+**Verificar variáveis do Mailtrap:**
+```powershell
+.\scripts\verificar-variaveis-cloud.ps1
+```
+3. Verifique logs: `az functionapp log tail --name feedback-function-prod --resource-group feedback-rg`
+
+**⏱️ Tempo estimado:** 10 segundos
+
+---
+
 ## ✅ Checklist de Validação
 
 Após seguir todos os passos, verifique:
@@ -217,9 +243,63 @@ Após seguir todos os passos, verifique:
 6. Testar endpoints
    ↓
 7. Verificar logs e emails
+   ↓
+8. Verificar logs e variáveis de ambiente (se necessário)
 ```
 
 **⏱️ Tempo total estimado:** 10-15 minutos
+
+---
+
+## 🔍 Diagnosticar Problemas de Email
+
+Se os emails não estão sendo enviados para feedbacks críticos, siga estes passos:
+
+### **Verificar Variáveis de Ambiente**
+
+```powershell
+.\scripts\verificar-variaveis-cloud.ps1
+```
+
+**Verifique se estão configuradas:**
+- ✅ `MAILTRAP_API_TOKEN`
+- ✅ `MAILTRAP_INBOX_ID`
+- ✅ `ADMIN_EMAIL`
+
+### **Verificar Logs**
+
+```powershell
+az functionapp log tail --name feedback-function-prod --resource-group feedback-rg
+```
+
+**Ou acesse o portal Azure:**
+- Function App → `feedback-function-prod` → Log stream
+
+**Procure por:**
+- `"Feedback crítico detectado"` → Feedback identificado como crítico
+- `"Enviando notificação por email"` → Tentando enviar email
+- `"Email enviado com sucesso"` → Email enviado
+- `"ERRO"` → Erro no envio (ver detalhes)
+
+### **Problemas Comuns e Soluções:**
+
+1. **Variáveis do Mailtrap não configuradas:**
+   - Configure usando: `az functionapp config appsettings set --name feedback-function-prod --resource-group feedback-rg --settings "MAILTRAP_API_TOKEN=..." "MAILTRAP_INBOX_ID=..." "ADMIN_EMAIL=..."`
+
+2. **Feedback não é crítico:**
+   - Apenas feedbacks com nota ≤ 3 disparam email
+   - Teste com: `{"descricao":"Teste","nota":2,"urgencia":"HIGH"}`
+
+3. **Erro no envio de email:**
+   - Verifique logs para erro específico do Mailtrap
+   - Verifique se o token e inbox ID estão corretos
+   - Verifique se o email do admin está correto
+   - Verifique se há erros de compilação
+
+4. **Email não recebido:**
+   - Verifique se as variáveis do Mailtrap estão configuradas: `.\scripts\verificar-variaveis-cloud.ps1`
+   - Verifique os logs da função para erros
+   - Confirme que o feedback tem nota ≤ 3 (crítico)
 
 ---
 
@@ -256,7 +336,7 @@ A aplicação requer os seguintes recursos no Azure:
 
 | Recurso | Tipo | Finalidade |
 |---------|------|------------|
-| **Storage Account** | Standard LRS | Table Storage (feedbacks) + Blob Storage (relatórios) + Queue Storage (notificações) |
+| **Storage Account** | Standard LRS | Table Storage (feedbacks) + Blob Storage (relatórios) |
 | **Function App** | Consumption Plan (Linux) | Host da aplicação serverless |
 | **Resource Group** | - | Agrupa todos os recursos |
 | **Mailtrap** | Free Tier | Envio de emails para notificações críticas |
@@ -292,7 +372,6 @@ az account list-locations --query "[?metadata.regionCategory=='Recommended'].{Na
 - **Recursos habilitados**:
   - Table Storage (para feedbacks)
   - Blob Storage (para relatórios semanais)
-  - Queue Storage (para fila de notificações críticas - fila: `critical-feedbacks`)
 
 #### 2. Mailtrap
 - **Tier**: Free Tier (suficiente para desenvolvimento e testes)
@@ -700,20 +779,62 @@ az webapp log tail `
 2. Verificar Storage Account está ativo
 3. Verificar container `weekly-reports` foi criado
 
-### Problema: Erro de conexão com Queue Storage
+### Problema: Email não está sendo enviado para feedbacks críticos
 
-**Solução:**
-1. Verificar `AZURE_STORAGE_CONNECTION_STRING` está configurada
-2. Verificar se a fila `critical-feedbacks` existe (é criada automaticamente)
-3. Verificar se o Azure Functions está processando a fila
+**Sintomas:**
+- Feedback crítico é criado com sucesso (retorna 201)
+- Mas email não é recebido no Mailtrap
+- Não há logs de envio de email
 
-### Problema: Email não está sendo enviado
+**Diagnóstico rápido:**
 
-**Solução:**
-1. Verificar `MAILTRAP_API_TOKEN` está configurada
-2. Verificar `MAILTRAP_INBOX_ID` está configurada
-3. Verificar `ADMIN_EMAIL` está configurada
-4. Verificar logs da NotifyAdminFunction para erros
+1. **Verificar variáveis do Mailtrap:**
+   ```powershell
+   .\scripts\verificar-variaveis-cloud.ps1
+   ```
+   Verifique se estão configuradas:
+   - `MAILTRAP_API_TOKEN`
+   - `MAILTRAP_INBOX_ID`
+   - `ADMIN_EMAIL`
+
+2. **Verificar logs em tempo real:**
+   ```powershell
+   az functionapp log tail --name feedback-function-prod --resource-group feedback-rg
+   ```
+   Ou acesse: Portal Azure → Function App → `feedback-function-prod` → Log stream
+   
+   Procure por:
+   - `"Feedback crítico detectado"` → Confirma que feedback foi identificado como crítico
+   - `"Enviando notificação por email"` → Confirma tentativa de envio
+   - `"Email enviado com sucesso"` → Confirma envio bem-sucedido
+   - `"ERRO"` → Indica problema (ver detalhes)
+
+3. **Verificar se feedback é crítico:**
+   - Apenas feedbacks com nota ≤ 3 disparam email
+   - Teste com: `{"descricao":"Teste crítico","nota":2,"urgencia":"HIGH"}`
+
+**Soluções:**
+
+1. **Se variáveis não estão configuradas:**
+   ```powershell
+   az functionapp config appsettings set `
+       --name feedback-function-prod `
+       --resource-group feedback-rg `
+       --settings `
+           "MAILTRAP_API_TOKEN=seu-token" `
+           "MAILTRAP_INBOX_ID=seu-inbox-id" `
+           "ADMIN_EMAIL=seu-email@exemplo.com"
+   ```
+
+2. **Se há erro nos logs:**
+   - Verifique se o token do Mailtrap está correto
+   - Verifique se o Inbox ID está correto
+   - Verifique se o email do admin está correto
+   - Verifique se a conta Mailtrap está ativa
+
+3. **Se não há logs de tentativa de envio:**
+   - Verifique se o feedback tem nota ≤ 3
+   - Verifique logs da `FeedbackHttpFunction` para confirmar processamento
 
 ### Problema: Functions não aparecem
 
@@ -765,7 +886,6 @@ az webapp log tail `
 - [Azure Functions Java Guide](https://docs.microsoft.com/azure/azure-functions/functions-reference-java)
 - [Quarkus Azure Functions](https://quarkus.io/guides/azure-functions-http)
 - [Azure Storage Documentation](https://docs.microsoft.com/azure/storage/)
-- [Azure Queue Storage Documentation](https://docs.microsoft.com/azure/storage/queues/)
 - [Mailtrap Documentation](https://mailtrap.io/docs/)
 
 ---
@@ -775,7 +895,7 @@ az webapp log tail `
 | Recurso | Custo Estimado (mensal) |
 |---------|------------------------|
 | Function App (Consumption) | ~$0.20 por 1M execuções |
-| Storage Account (LRS) | ~$0.018/GB (inclui Table, Blob e Queue Storage) |
+| Storage Account (LRS) | ~$0.018/GB (inclui Table e Blob Storage) |
 | Mailtrap (Free Tier) | $0 (até 500 emails/mês) |
 
 **Total estimado**: ~$5-10/mês para uso moderado (sem Service Bus, reduzindo custos significativamente)
@@ -797,7 +917,7 @@ A destruição de recursos é uma operação **IRREVERSÍVEL**. Todos os dados s
 Use o script PowerShell para destruir todos os recursos:
 
 ```powershell
-.\scripts\destruir-recursos-azure.ps1 `
+.\scripts\deletar-recursos-azure.ps1 `
     -ResourceGroupName "feedback-rg" `
     -Suffix "prod"
 ```
@@ -812,13 +932,13 @@ Use o script PowerShell para destruir todos os recursos:
 
 ```powershell
 # Destruição com confirmação interativa
-.\scripts\destruir-recursos-azure.ps1 -ResourceGroupName "feedback-rg" -Suffix "prod"
+.\scripts\deletar-recursos-azure.ps1 -ResourceGroupName "feedback-rg" -Suffix "prod"
 
 # Destruição rápida (deleta apenas o Resource Group)
-.\scripts\destruir-recursos-azure.ps1 -ResourceGroupName "feedback-rg" -Suffix "prod" -DeleteResourceGroupOnly
+.\scripts\deletar-recursos-azure.ps1 -ResourceGroupName "feedback-rg" -Suffix "prod" -DeleteResourceGroupOnly
 
 # Destruição sem confirmação (cuidado!)
-.\scripts\destruir-recursos-azure.ps1 -ResourceGroupName "feedback-rg" -Suffix "prod" -Force
+.\scripts\deletar-recursos-azure.ps1 -ResourceGroupName "feedback-rg" -Suffix "prod" -Force
 ```
 
 ### Opção 2: Destruição Manual via Azure CLI

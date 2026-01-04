@@ -29,11 +29,11 @@ Sistema de Feedback Serverless para avaliação de aulas, desenvolvido com Azure
 O **Feedback Sync** é uma plataforma serverless hospedada no Azure que permite:
 
 * **Estudantes** podem avaliar aulas através de feedbacks com descrição e nota (0 a 10)
-* **Administradores** recebem notificações automáticas para feedbacks críticos (nota ≤ 3)
-* **Relatórios semanais** são gerados automaticamente com métricas consolidadas
+* **Administradores** recebem notificações automáticas por email para feedbacks críticos (nota ≤ 3) - envio direto e síncrono
+* **Relatórios semanais** são gerados automaticamente com métricas consolidadas via Timer Trigger
 * **Monitoramento** completo da aplicação através do Azure Monitor
 
-O sistema foi desenvolvido seguindo os princípios de **Clean Architecture** e **Serverless Computing**, utilizando **Azure Functions** para processamento assíncrono e escalável.
+O sistema foi desenvolvido seguindo os princípios de **Clean Architecture** e **Serverless Computing**, utilizando **Azure Functions** para processamento escalável. O fluxo de notificações é direto e síncrono, simplificando a arquitetura e reduzindo custos.
 
 ---
 
@@ -68,25 +68,31 @@ O sistema foi desenvolvido seguindo os princípios de **Clean Architecture** e *
 
 O sistema implementa **duas funções serverless** seguindo o princípio de **Responsabilidade Única**:
 
-### 🔔 NotifyAdminFunction
+### 📝 FeedbackHttpFunction
 
-**Tipo**: Queue Trigger  
-**Responsabilidade**: Processar notificações críticas de feedbacks da fila
+**Tipo**: HTTP Trigger  
+**Responsabilidade**: Receber feedbacks de avaliação e processar notificações críticas
 
 **Fluxo:**
-1. Recebe mensagem da fila `critical-feedbacks` do Azure Queue Storage
-2. Deserializa o feedback crítico (nota ≤ 3)
-3. Envia notificação para administradores via Mailtrap
-4. Registra logs de processamento
+1. Recebe requisição HTTP POST `/api/avaliacao`
+2. Valida dados de entrada (descrição, nota 0-10, urgência)
+3. Cria entidade Feedback e salva no Azure Table Storage
+4. Se feedback é crítico (nota ≤ 3), envia email diretamente via Mailtrap
+5. Retorna resposta HTTP com ID do feedback criado
 
 **Configuração:**
-- **Fila**: `critical-feedbacks` (Azure Queue Storage)
-- **Trigger**: Automático quando mensagem é publicada na fila
-- **Integração**: Azure Queue Storage (trigger) + Mailtrap (envio de emails)
+- **Endpoint**: `POST /api/avaliacao`
+- **Auth Level**: ANONYMOUS
+- **Integração**: Azure Table Storage (persistência) + Mailtrap (envio de emails)
 
 **Integração com Recursos Azure:**
-- ✅ **Queue Storage** - Fila de mensagens críticas
-- ✅ **Mailtrap** - Envio de emails
+- ✅ **Table Storage** - Persistência de feedbacks
+- ✅ **Mailtrap** - Envio direto de emails para feedbacks críticos
+
+**Notificações Automáticas:**
+- ✅ Feedback crítico (nota ≤ 3) → Email enviado automaticamente
+- ✅ Dados do email: Descrição, Urgência, Data de Envio
+- ✅ Envio síncrono (dentro da mesma requisição HTTP)
 
 ### 📈 WeeklyReportFunction
 
@@ -173,7 +179,6 @@ feedback-sync/
 │   │   │       │   └── gateways/
 │   │   │       │       ├── FeedbackGateway.java
 │   │   │       │       ├── EmailNotificationGateway.java
-│   │   │       │       ├── QueueNotificationGateway.java
 │   │   │       │       └── ReportStorageGateway.java
 │   │   │       └── infrastructure/      # Camada de Infraestrutura
 │   │   │           ├── config/
@@ -182,11 +187,9 @@ feedback-sync/
 │   │   │           ├── handlers/         # Azure Functions
 │   │   │           │   ├── FeedbackHttpFunction.java
 │   │   │           │   ├── HealthHttpFunction.java
-│   │   │           │   ├── NotifyAdminFunction.java
 │   │   │           │   └── WeeklyReportFunction.java
 │   │   │           ├── gateways/
 │   │   │           │   ├── TableStorageFeedbackGatewayImpl.java
-│   │   │           │   ├── QueueNotificationGatewayImpl.java
 │   │   │           │   ├── EmailNotificationGatewayImpl.java
 │   │   │           │   └── BlobReportStorageGatewayImpl.java
 │   │   │           └── mappers/
@@ -198,10 +201,16 @@ feedback-sync/
 │   └── test/
 │       └── java/... (estrutura espelhada)
 ├── scripts/
-│   ├── criar-recursos-azure.ps1
-│   ├── executar-aplicacao.ps1
-│   ├── implantar-azure.ps1
-│   └── testar-aplicacao.ps1
+│   ├── criar-recursos-azure.ps1          # Cria recursos no Azure
+│   ├── configurar-storage-connection.ps1 # Configura storage connection
+│   ├── verificar-variaveis-cloud.ps1    # Verifica variáveis na cloud
+│   ├── implantar-azure.ps1               # Faz deploy da aplicação
+│   ├── deletar-function-app.ps1         # Deleta apenas Function App
+│   ├── deletar-recursos-azure.ps1        # Deleta todos os recursos
+│   ├── executar-aplicacao.ps1            # Executa aplicação localmente
+│   ├── executar-azure-functions-local.ps1 # Executa Azure Functions localmente
+│   ├── testar-aplicacao.ps1             # Testa aplicação completa
+│   └── verificar-variaveis-ambiente.ps1  # Verifica variáveis locais
 ├── collection/                          # Postman Collections
 ├── docker-compose.yml                   # Emuladores Azure locais
 ├── pom.xml
@@ -227,7 +236,7 @@ O projeto segue os princípios da **Clean Architecture**, garantindo:
 #### 1. **Domain** (Núcleo)
 * **Entidades**: `Feedback`
 * **Value Objects**: `Score`, `Urgency`
-* **Interfaces (Gateways)**: `FeedbackGateway`, `EmailNotificationGateway`, `QueueNotificationGateway`, `ReportStorageGateway`
+* **Interfaces (Gateways)**: `FeedbackGateway`, `EmailNotificationGateway`, `ReportStorageGateway`
 * **Exceções de Domínio**: `FeedbackDomainException`, `FeedbackPersistenceException`, `NotificationException`
 
 #### 2. **Application** (Casos de Uso)
@@ -237,8 +246,8 @@ O projeto segue os princípios da **Clean Architecture**, garantindo:
 * **DTOs**: Requests e Responses
 
 #### 3. **Infrastructure** (Implementações)
-* **Handlers**: Azure Functions (`FeedbackHttpFunction`, `HealthHttpFunction`, `NotifyAdminFunction`, `WeeklyReportFunction`)
-* **Gateways**: Implementações concretas (Table Storage, Queue Storage, Mailtrap, Blob Storage)
+* **Handlers**: Azure Functions (`FeedbackHttpFunction`, `HealthHttpFunction`, `WeeklyReportFunction`)
+* **Gateways**: Implementações concretas (Table Storage, Mailtrap, Blob Storage)
 * **Config**: Configurações (Exception Mapper, Jackson)
 
 ---
@@ -252,7 +261,6 @@ O projeto segue os princípios da **Clean Architecture**, garantindo:
 | **Function App** | Consumption Plan (Linux) | Host da aplicação serverless |
 | **Table Storage** | Standard LRS | Persistência de feedbacks |
 | **Blob Storage** | Standard LRS | Armazenamento de relatórios semanais |
-| **Queue Storage** | Standard LRS | Fila de notificações críticas |
 | **Mailtrap** | Free Tier | Envio de emails para notificações críticas |
 | **Application Insights** | Monitoramento | Logs, métricas e rastreamento |
 
@@ -281,8 +289,7 @@ graph TB
             HealthFunc[❤️ HealthHttpFunction<br/>GET /api/health]
         end
         
-        subgraph "Azure Functions Triggers"
-            NotifyFunc[🔔 NotifyAdminFunction<br/>Queue Trigger]
+            subgraph "Azure Functions Triggers"
             WeeklyFunc[📈 WeeklyReportFunction<br/>Timer Trigger CRON]
         end
         
@@ -295,7 +302,6 @@ graph TB
     subgraph "Azure Storage"
         TableStorage[(📋 Table Storage<br/>feedbacks)]
         BlobStorage[(📦 Blob Storage<br/>weekly-reports)]
-        QueueStorage[(📬 Queue Storage<br/>critical-feedbacks)]
     end
 
     subgraph "Notificações"
@@ -310,9 +316,7 @@ graph TB
     Estudante -->|POST /api/avaliacao| FeedbackFunc
     FeedbackFunc --> CreateUC
     CreateUC -->|Salvar| TableStorage
-    CreateUC -->|Se crítico| QueueStorage
-    QueueStorage -->|Trigger| NotifyFunc
-    NotifyFunc --> Mailtrap
+    CreateUC -->|Se crítico| Mailtrap
     Mailtrap --> Email
     
     WeeklyFunc -->|Timer CRON| ReportUC
@@ -320,13 +324,12 @@ graph TB
     ReportUC -->|Salvar| BlobStorage
     
     FuncApp -.->|Logs| AppInsights
-    NotifyFunc -.->|Logs| AppInsights
+    FeedbackFunc -.->|Logs| AppInsights
     WeeklyFunc -.->|Logs| AppInsights
 
     style FuncApp fill:#0078D4,color:#fff
     style TableStorage fill:#0078D4,color:#fff
     style BlobStorage fill:#0078D4,color:#fff
-    style QueueStorage fill:#0078D4,color:#fff
     style Mailtrap fill:#FFE01B,color:#000
     style AppInsights fill:#0078D4,color:#fff
 ```
@@ -340,10 +343,9 @@ sequenceDiagram
     participant CreateFeedbackUseCase
     participant FeedbackGateway
     participant TableStorage
-    participant QueueNotificationGateway
-    participant QueueStorage
-    participant NotifyAdminFunction
+    participant EmailGateway
     participant Mailtrap
+    participant Admin
 
     Estudante->>FeedbackHttpFunction: POST /api/avaliacao<br/>{descricao, nota, urgencia}
     
@@ -358,46 +360,18 @@ sequenceDiagram
     FeedbackGateway-->>CreateFeedbackUseCase: Feedback salvo
     
     alt Feedback é crítico (nota ≤ 3)
-        CreateFeedbackUseCase->>QueueNotificationGateway: publishCritical(Feedback)
-        QueueNotificationGateway->>QueueStorage: Publicar na fila<br/>critical-feedbacks
-        QueueStorage-->>QueueNotificationGateway: Mensagem publicada
-        QueueStorage->>NotifyAdminFunction: Trigger automático<br/>(Queue Trigger)
-        NotifyAdminFunction->>Mailtrap: Enviar email<br/>ao administrador
-        Mailtrap-->>NotifyAdminFunction: Email enviado
+        CreateFeedbackUseCase->>CreateFeedbackUseCase: buildEmailContent(Feedback)
+        CreateFeedbackUseCase->>EmailGateway: sendAdminNotification(emailContent)
+        EmailGateway->>Mailtrap: Enviar email<br/>ao administrador
+        Mailtrap->>Admin: 📧 E-mail de notificação<br/>ALERTA: Feedback Crítico
+        Mailtrap-->>EmailGateway: Email enviado
+        EmailGateway-->>CreateFeedbackUseCase: Notificação enviada
     end
     
     CreateFeedbackUseCase-->>FeedbackHttpFunction: FeedbackResponse(id, status)
     FeedbackHttpFunction-->>Estudante: HTTP 201 Created<br/>{id, status: "recebido"}
 ```
 
-### 🔔 Diagrama de Sequência - Notificação de Feedback Crítico
-
-```mermaid
-sequenceDiagram
-    participant CreateFeedbackUseCase
-    participant QueueNotificationGateway
-    participant QueueStorage
-    participant NotifyAdminFunction
-    participant Mailtrap
-    participant Admin
-
-    Note over CreateFeedbackUseCase: Feedback crítico criado<br/>(nota ≤ 3)
-    
-    CreateFeedbackUseCase->>QueueNotificationGateway: publishCritical(Feedback)
-    
-    QueueNotificationGateway->>QueueStorage: Publicar mensagem na fila<br/>critical-feedbacks
-    QueueStorage-->>QueueNotificationGateway: Mensagem publicada
-    
-    QueueStorage->>NotifyAdminFunction: Trigger automático<br/>(Queue Trigger)
-    
-    NotifyAdminFunction->>NotifyAdminFunction: Deserializar feedback<br/>da mensagem
-    
-    NotifyAdminFunction->>Mailtrap: Enviar email<br/>ao administrador
-    Mailtrap->>Admin: 📧 E-mail de notificação<br/>ALERTA: Feedback Crítico
-    
-    Mailtrap-->>NotifyAdminFunction: Email enviado (Status 200)
-    NotifyAdminFunction-->>QueueStorage: Processamento concluído
-```
 
 ### 📈 Diagrama de Sequência - Geração de Relatório Semanal
 
@@ -441,8 +415,8 @@ sequenceDiagram
 ```mermaid
 graph TB
     subgraph "Infrastructure Layer"
-        Handlers[Azure Functions<br/>FeedbackHttpFunction<br/>HealthHttpFunction<br/>NotifyAdminFunction<br/>WeeklyReportFunction]
-        GatewaysImpl[Gateways Implementations<br/>TableStorageFeedbackGatewayImpl<br/>QueueNotificationGatewayImpl<br/>EmailNotificationGatewayImpl<br/>BlobReportStorageGatewayImpl]
+        Handlers[Azure Functions<br/>FeedbackHttpFunction<br/>HealthHttpFunction<br/>WeeklyReportFunction]
+        GatewaysImpl[Gateways Implementations<br/>TableStorageFeedbackGatewayImpl<br/>EmailNotificationGatewayImpl<br/>BlobReportStorageGatewayImpl]
         Config[Config<br/>GlobalExceptionMapper<br/>JacksonConfig]
     end
 
@@ -454,11 +428,10 @@ graph TB
     subgraph "Domain Layer"
         Entities[Entities<br/>Feedback]
         ValueObjects[Value Objects<br/>Score<br/>Urgency]
-        Gateways[Gateways Interfaces<br/>FeedbackGateway<br/>EmailNotificationGateway<br/>QueueNotificationGateway<br/>ReportStorageGateway]
+        Gateways[Gateways Interfaces<br/>FeedbackGateway<br/>EmailNotificationGateway<br/>ReportStorageGateway]
         Exceptions[Domain Exceptions<br/>FeedbackDomainException<br/>FeedbackPersistenceException<br/>NotificationException]
     end
 
-    Controllers -->|usa| UseCases
     Handlers -->|usa| UseCases
     UseCases -->|usa| Entities
     UseCases -->|usa| ValueObjects
@@ -479,7 +452,7 @@ graph TB
 graph LR
     subgraph "Feedback Sync System"
         subgraph "API Layer"
-            REST[REST API<br/>Quarkus]
+            HTTP[HTTP API<br/>Azure Functions]
         end
         
         subgraph "Business Logic"
@@ -495,51 +468,45 @@ graph LR
         
         subgraph "Infrastructure"
             TS[Table Storage<br/>Gateway]
-            QNG[Queue Notification<br/>Gateway]
             ENG[Email Notification<br/>Gateway]
             BS[Blob Storage<br/>Gateway]
         end
         
         subgraph "Azure Functions"
-            NF[NotifyAdmin<br/>Function]
+            FF[FeedbackHttp<br/>Function]
             WF[WeeklyReport<br/>Function]
         end
         
         subgraph "External Services"
             AST[(Azure Table<br/>Storage)]
             MT[Mailtrap<br/>Email Service]
-            QS[(Azure Queue<br/>Storage)]
             ABS[(Azure Blob<br/>Storage)]
             AI[Application<br/>Insights]
         end
     end
 
-    REST --> UC1
+    HTTP --> FF
+    FF --> UC1
     UC1 --> FB
     UC2 --> FB
     FB --> SC
     FB --> UR
     UC1 --> TS
-    UC1 --> QNG
+    UC1 --> ENG
     UC2 --> TS
     UC2 --> BS
     TS --> AST
-    QNG --> QS
-    QS -->|Trigger| NF
-    NF --> ENG
     ENG --> MT
     BS --> ABS
     WF --> UC2
-    REST -.-> AI
-    NF -.-> AI
+    FF -.-> AI
     WF -.-> AI
 
-    style REST fill:#4695EB,color:#fff
+    style FF fill:#4695EB,color:#fff
     style UC1 fill:#2196F3,color:#fff
     style UC2 fill:#2196F3,color:#fff
     style FB fill:#4CAF50,color:#fff
     style AST fill:#0078D4,color:#fff
-    style QS fill:#0078D4,color:#fff
     style ABS fill:#0078D4,color:#fff
 ```
 
@@ -558,13 +525,11 @@ flowchart TD
     Save --> Check{Feedback crítico?<br/>nota ≤ 3}
     
     Check -->|Não| Success1[201 Created<br/>ID retornado]
-    Check -->|Sim| PublishQueue[Publicar na fila<br/>critical-feedbacks]
+    Check -->|Sim| SendEmail[Enviar email<br/>via Mailtrap]
     
-    PublishQueue --> Success1
+    SendEmail --> Success1
     
-    PublishQueue -.->|Mensagem| QueueStorage[Azure Queue<br/>Storage]
-    QueueStorage -.->|Trigger| NotifyFunc[NotifyAdminFunction<br/>Queue Trigger]
-    NotifyFunc -.->|Email| Mailtrap[Mailtrap<br/>Email Service]
+    SendEmail -.->|Email| Mailtrap[Mailtrap<br/>Email Service]
     Mailtrap -.->|Email| Admin[Administrador<br/>recebe email]
     
     Timer[Timer CRON<br/>0 */5 * * * *<br/>(A cada 5 min - configurável)] --> WeeklyFunc[WeeklyReportFunction]
@@ -626,11 +591,6 @@ erDiagram
         datetime sentAt
     }
     
-    QUEUE_STORAGE {
-        string queueName "critical-feedbacks"
-        string message "JSON do feedback"
-        datetime enqueuedAt
-    }
 ```
 
 ### 🔐 Diagrama de Segurança e Acesso
@@ -644,7 +604,7 @@ graph TB
     subgraph "Azure Function App"
         HTTPS[HTTPS Endpoint<br/>TLS/SSL]
         Auth[Validação de Request]
-        Controller[Controllers]
+        Handlers[Azure Functions<br/>HTTP Triggers]
     end
 
     subgraph "Application Settings"
@@ -665,12 +625,12 @@ graph TB
 
     Client -->|HTTPS| HTTPS
     HTTPS --> Auth
-    Auth --> Controller
-    Controller --> ConnStrings
+    Auth --> Handlers
+    Handlers --> ConnStrings
     ConnStrings --> Table
     ConnStrings --> Blob
     ConnStrings --> Mailtrap
-    Controller -.->|Logs| AppInsights
+    Handlers -.->|Logs| AppInsights
     AppInsights -.-> Monitor
 
     style HTTPS fill:#4CAF50,color:#fff
@@ -685,12 +645,11 @@ graph TB
 | Símbolo | Significado |
 |---------|-------------|
 | ⚡ | Azure Function |
-| 📝 | Controller/Endpoint REST |
+| 📝 | Azure Function HTTP Trigger |
 | 🔔 | Função de Notificação |
 | 📈 | Função de Relatório |
 | 📋 | Table Storage |
 | 📦 | Blob Storage |
-| 📬 | Queue Storage |
 | 📧 | Mailtrap |
 | 📊 | Application Insights |
 | 📧 | E-mail |
@@ -713,7 +672,6 @@ graph TB
 * **Network Security**: VNet integration (opcional)
 * **Monitoring**: Application Insights com alertas configurados
 * **Backup**: Retenção automática de dados no Storage
-* **Queue Storage**: Fila de mensagens para processamento assíncrono de notificações
 
 ---
 
@@ -818,6 +776,9 @@ Siga estes passos **na ordem** para fazer deploy completo:
    --header 'Content-Type: application/json' \
    --data '{"descricao":"Teste","nota":2,"urgencia":"HIGH"}'
    ```
+
+6. **Verificar logs (se email não for enviado):**
+   Verifique os logs da Function App no portal Azure para confirmar o envio de emails.
 
 **📖 Para mais detalhes, consulte:** [GUIA_DEPLOY_AZURE.md](GUIA_DEPLOY_AZURE.md)
 
@@ -1037,11 +998,11 @@ Content-Type: application/json
 | Requisito | Status | Implementação |
 |-----------|--------|---------------|
 | **Ambiente Cloud** | ✅ | Azure Functions (Consumption Plan) |
-| **Serverless** | ✅ | 2 Azure Functions (NotifyAdmin, WeeklyReport) |
+| **Serverless** | ✅ | 2 Azure Functions (FeedbackHttpFunction, WeeklyReportFunction) |
 | **Responsabilidade Única** | ✅ | Cada função tem responsabilidade específica |
 | **Deploy Automatizado** | ✅ | Script PowerShell + Azure Functions Maven Plugin |
 | **Monitoramento** | ✅ | Application Insights + Azure Monitor |
-| **Notificações Automáticas** | ✅ | Azure Queue Storage + Mailtrap (processamento assíncrono de emails) |
+| **Notificações Automáticas** | ✅ | Mailtrap (envio direto e síncrono de emails para feedbacks críticos) |
 | **Relatório Semanal** | ✅ | Timer Trigger + WeeklyReportFunction |
 | **Segurança** | ✅ | Connection Strings criptografadas, HTTPS |
 | **Governança** | ✅ | Resource Groups, Tags, Policies |
@@ -1077,8 +1038,7 @@ Content-Type: application/json
 
 | Evento | Gateway | Serviço | Ação |
 |--------|---------|---------|------|
-| **Feedback Crítico** | QueueNotificationGateway | Azure Queue Storage | Publica mensagem na fila `critical-feedbacks` |
-| **Processamento da Fila** | NotifyAdminFunction | Mailtrap | Processa mensagem da fila e envia email ao administrador |
+| **Feedback Crítico** | EmailNotificationGateway | Mailtrap | Envia email diretamente ao administrador (síncrono) |
 
 ---
 
