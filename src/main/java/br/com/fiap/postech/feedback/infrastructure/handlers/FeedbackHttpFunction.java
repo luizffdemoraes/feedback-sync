@@ -16,8 +16,8 @@ import com.microsoft.azure.functions.annotation.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.InputStream;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Azure Function HTTP Trigger para receber feedbacks.
@@ -123,23 +123,25 @@ public class FeedbackHttpFunction {
                     methods = {HttpMethod.POST},
                     authLevel = AuthorizationLevel.ANONYMOUS,
                     route = "avaliacao"
-            ) HttpRequestMessage<InputStream> request,
+            ) HttpRequestMessage<Optional<String>> request,
             final ExecutionContext context) {
         
         context.getLogger().info("Recebendo requisição POST /api/avaliacao");
         
         try {
             // Ler corpo da requisição
-            InputStream bodyStream = request.getBody();
-            if (bodyStream == null) {
+            Optional<String> bodyOptional = request.getBody();
+            if (bodyOptional.isEmpty() || bodyOptional.get().isBlank()) {
                 return request.createResponseBuilder(HttpStatus.BAD_REQUEST)
                         .body("{\"error\": \"Corpo da requisição é obrigatório\"}")
                         .header("Content-Type", "application/json")
                         .build();
             }
             
+            String bodyString = bodyOptional.get();
+            
             // Converter JSON para FeedbackRequest
-            FeedbackRequest feedbackRequest = objectMapper.readValue(bodyStream, FeedbackRequest.class);
+            FeedbackRequest feedbackRequest = objectMapper.readValue(bodyString, FeedbackRequest.class);
             
             // Validar campos obrigatórios
             if (feedbackRequest.description() == null || feedbackRequest.description().trim().isEmpty()) {

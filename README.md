@@ -179,9 +179,9 @@ feedback-sync/
 │   │   │           ├── config/
 │   │   │           │   ├── GlobalExceptionMapper.java
 │   │   │           │   └── JacksonConfig.java
-│   │   │           ├── controllers/
-│   │   │           │   ├── FeedbackController.java
 │   │   │           ├── handlers/         # Azure Functions
+│   │   │           │   ├── FeedbackHttpFunction.java
+│   │   │           │   ├── HealthHttpFunction.java
 │   │   │           │   ├── NotifyAdminFunction.java
 │   │   │           │   └── WeeklyReportFunction.java
 │   │   │           ├── gateways/
@@ -237,8 +237,7 @@ O projeto segue os princípios da **Clean Architecture**, garantindo:
 * **DTOs**: Requests e Responses
 
 #### 3. **Infrastructure** (Implementações)
-* **Controllers**: Endpoints REST (`FeedbackController`)
-* **Handlers**: Azure Functions (`NotifyAdminFunction`, `WeeklyReportFunction`)
+* **Handlers**: Azure Functions (`FeedbackHttpFunction`, `HealthHttpFunction`, `NotifyAdminFunction`, `WeeklyReportFunction`)
 * **Gateways**: Implementações concretas (Table Storage, Queue Storage, Mailtrap, Blob Storage)
 * **Config**: Configurações (Exception Mapper, Jackson)
 
@@ -277,11 +276,12 @@ graph TB
     subgraph "Azure Function App"
         FuncApp[⚡ Function App<br/>Consumption Plan<br/>Linux + Java 21]
         
-        subgraph "REST Endpoints"
-            FeedbackCtrl[📝 FeedbackController<br/>POST /avaliacao]
+        subgraph "Azure Functions HTTP Triggers"
+            FeedbackFunc[📝 FeedbackHttpFunction<br/>POST /api/avaliacao]
+            HealthFunc[❤️ HealthHttpFunction<br/>GET /api/health]
         end
         
-        subgraph "Azure Functions"
+        subgraph "Azure Functions Triggers"
             NotifyFunc[🔔 NotifyAdminFunction<br/>Queue Trigger]
             WeeklyFunc[📈 WeeklyReportFunction<br/>Timer Trigger CRON]
         end
@@ -307,8 +307,8 @@ graph TB
         AppInsights[📊 Application Insights<br/>Logs e Métricas]
     end
 
-    Estudante -->|POST /avaliacao| FeedbackCtrl
-    FeedbackCtrl --> CreateUC
+    Estudante -->|POST /api/avaliacao| FeedbackFunc
+    FeedbackFunc --> CreateUC
     CreateUC -->|Salvar| TableStorage
     CreateUC -->|Se crítico| QueueStorage
     QueueStorage -->|Trigger| NotifyFunc
@@ -336,7 +336,7 @@ graph TB
 ```mermaid
 sequenceDiagram
     participant Estudante
-    participant FeedbackController
+    participant FeedbackHttpFunction
     participant CreateFeedbackUseCase
     participant FeedbackGateway
     participant TableStorage
@@ -345,9 +345,9 @@ sequenceDiagram
     participant NotifyAdminFunction
     participant Mailtrap
 
-    Estudante->>FeedbackController: POST /avaliacao<br/>{descricao, nota, urgencia}
+    Estudante->>FeedbackHttpFunction: POST /api/avaliacao<br/>{descricao, nota, urgencia}
     
-    FeedbackController->>CreateFeedbackUseCase: execute(FeedbackRequest)
+    FeedbackHttpFunction->>CreateFeedbackUseCase: execute(FeedbackRequest)
     
     CreateFeedbackUseCase->>CreateFeedbackUseCase: Validar dados<br/>(descrição, nota)
     CreateFeedbackUseCase->>CreateFeedbackUseCase: Criar entidade Feedback<br/>(Score, Urgency)
@@ -366,8 +366,8 @@ sequenceDiagram
         Mailtrap-->>NotifyAdminFunction: Email enviado
     end
     
-    CreateFeedbackUseCase-->>FeedbackController: FeedbackResponse(id, status)
-    FeedbackController-->>Estudante: HTTP 201 Created<br/>{id, status: "recebido"}
+    CreateFeedbackUseCase-->>FeedbackHttpFunction: FeedbackResponse(id, status)
+    FeedbackHttpFunction-->>Estudante: HTTP 201 Created<br/>{id, status: "recebido"}
 ```
 
 ### 🔔 Diagrama de Sequência - Notificação de Feedback Crítico
@@ -441,8 +441,7 @@ sequenceDiagram
 ```mermaid
 graph TB
     subgraph "Infrastructure Layer"
-        Controllers[Controllers<br/>FeedbackController]
-        Handlers[Azure Functions<br/>NotifyAdminFunction<br/>WeeklyReportFunction]
+        Handlers[Azure Functions<br/>FeedbackHttpFunction<br/>HealthHttpFunction<br/>NotifyAdminFunction<br/>WeeklyReportFunction]
         GatewaysImpl[Gateways Implementations<br/>TableStorageFeedbackGatewayImpl<br/>QueueNotificationGatewayImpl<br/>EmailNotificationGatewayImpl<br/>BlobReportStorageGatewayImpl]
         Config[Config<br/>GlobalExceptionMapper<br/>JacksonConfig]
     end

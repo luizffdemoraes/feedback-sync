@@ -242,9 +242,9 @@ try {
                 if ($statusCode -eq 404) {
                     Write-Warning "  O endpoint /api/avaliacao nao foi encontrado"
                     Write-Warning "  Possiveis causas:"
-                    Write-Warning "    - O FeedbackController nao esta sendo exposto corretamente"
+                    Write-Warning "    - A FeedbackHttpFunction nao esta sendo exposta corretamente"
                     Write-Warning "    - A aplicacao nao foi implantada corretamente"
-                    Write-Warning "    - Verifique se o Quarkus Azure Functions HTTP esta habilitado"
+                    Write-Warning "    - Verifique se a Azure Function foi deployada corretamente"
                 } elseif ($statusCode -eq 500) {
                     Write-Warning "  Erro interno do servidor"
                     Write-Warning "  Verifique os logs da Function App para mais detalhes:"

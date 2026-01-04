@@ -2,8 +2,8 @@
 # Script de Validação do Projeto Feedback
 # ============================================
 # Este script testa:
-# - Endpoint REST (FeedbackController)
-# - Azure Functions (WeeklyReportFunction)
+# - Azure Function HTTP Trigger (FeedbackHttpFunction)
+# - Azure Functions (WeeklyReportFunction, NotifyAdminFunction)
 # e gera um relatório de validação completo
 # ============================================
 
@@ -25,8 +25,8 @@ function Write-Detail { param($msg) if ($Verbose) { Write-Host "  -> $msg" -Fore
 
 # Variáveis globais
 $baseUrl = "http://localhost:7071"
-# Endpoint REST (FeedbackController - Clean Architecture)
-$endpointSubmit = "$baseUrl/avaliacao"  # Quarkus REST endpoint
+# Endpoint Azure Function HTTP Trigger (FeedbackHttpFunction)
+$endpointSubmit = "$baseUrl/api/avaliacao"  # Azure Function endpoint
 $testResults = @()
 $startTime = Get-Date
 
@@ -380,10 +380,10 @@ function Invoke-FunctionTest {
 
 function Test-FeedbackController {
     Write-Info "`n========================================"
-    Write-Info "TESTANDO: FeedbackController (REST)"
+    Write-Info "TESTANDO: FeedbackHttpFunction (Azure Function)"
     Write-Info "========================================"
-    Write-Info "Endpoint: POST /avaliacao"
-    Write-Info "Arquitetura: Clean Architecture (infrastructure/controllers)"
+    Write-Info "Endpoint: POST /api/avaliacao"
+    Write-Info "Arquitetura: Azure Function HTTP Trigger"
     Write-Info "========================================`n"
     
     # Teste 1: Feedback normal (sucesso)
@@ -741,7 +741,7 @@ if (-not $SkipPreChecks) {
 }
 
 Write-Info "`nIniciando testes do projeto...`n"
-Write-Info "  - FeedbackController (REST)"
+Write-Info "  - FeedbackHttpFunction (Azure Function HTTP Trigger)"
 Write-Info "  - Notificacao de Feedback Critico (Mailtrap)"
 Write-Info "  - WeeklyReportFunction (Azure Function)`n"
 
