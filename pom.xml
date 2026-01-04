@@ -94,13 +94,6 @@
             <artifactId>quarkus-rest-jackson</artifactId>
         </dependency>
 
-        <!-- Azure Functions HTTP - Necessário para expor endpoints REST na cloud -->
-        <!-- IMPORTANTE: O middleware só é aplicado a HTTP Triggers, não interfere com Queue/Timer Triggers -->
-        <!-- Comentar para execução local -->
-        <dependency>
-            <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-azure-functions-http</artifactId>
-        </dependency>
 
         <!-- Health Check (SmallRye Health) -->
         <dependency>
@@ -261,8 +254,8 @@
                     <resourceGroup>${functionAppResourceGroup}</resourceGroup>
                     <appName>${functionAppName}</appName>
                     <region>${region}</region>
-                    <!-- App Service Plan - se especificado, o plugin usará o existente -->
-                    <appServicePlanName>${appServicePlanName}</appServicePlanName>
+                    <!-- App Service Plan: OMITIDO para Consumption Plan (padrão) -->
+                    <!-- Para usar App Service Plan dedicado, adicione: <appServicePlanName>nome-do-plano</appServicePlanName> -->
                     <!-- Nota: Storage Account não precisa ser especificado - a Function App já está configurada -->
                     <runtime>
                         <os>linux</os>
