@@ -30,24 +30,24 @@ $ErrorActionPreference = "Stop"
 
 Write-Host ""
 Write-Host "============================================================" -ForegroundColor Red
-Write-Host "  DESTRUIÇÃO de Recursos Azure - Feedback Sync" -ForegroundColor Red
+Write-Host "  DESTRUICAO de Recursos Azure - Feedback Sync" -ForegroundColor Red
 Write-Host "============================================================" -ForegroundColor Red
 Write-Host ""
 
 # Verificar se Azure CLI está instalado
 if (-not (Get-Command az -ErrorAction SilentlyContinue)) {
-    Write-Host "❌ Azure CLI não encontrado. Instale em: https://aka.ms/installazurecliwindows" -ForegroundColor Red
+    Write-Host "[ERRO] Azure CLI nao encontrado. Instale em: https://aka.ms/installazurecliwindows" -ForegroundColor Red
     exit 1
 }
 
 # Verificar se está logado
 $azAccount = az account show 2>&1
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "❌ Não está logado no Azure. Execute: az login" -ForegroundColor Red
+    Write-Host "[ERRO] Nao esta logado no Azure. Execute: az login" -ForegroundColor Red
     exit 1
 }
 
-Write-Host "✅ Azure CLI verificado" -ForegroundColor Green
+Write-Host "[OK] Azure CLI verificado" -ForegroundColor Green
 $subscriptionName = az account show --query name -o tsv
 Write-Host "   Subscription: $subscriptionName" -ForegroundColor Gray
 Write-Host ""
@@ -66,7 +66,7 @@ if ($functionAppName.Length -gt 60) {
     $functionAppName = $functionAppName.Substring(0, 60)
 }
 
-Write-Host "📋 Recursos que serão destruídos:" -ForegroundColor Yellow
+Write-Host "Recursos que serao destruidos:" -ForegroundColor Yellow
 Write-Host ""
 Write-Host "Resource Group:" -ForegroundColor White
 Write-Host "  Nome: $ResourceGroupName" -ForegroundColor Gray
@@ -79,19 +79,19 @@ Write-Host "  Nome: $storageAccountName" -ForegroundColor Gray
 Write-Host ""
 
 # Verificar se Resource Group existe
-Write-Host "🔍 Verificando recursos..." -ForegroundColor Yellow
+Write-Host "- Verificando recursos..." -ForegroundColor Yellow
 $rgExists = az group exists --name $ResourceGroupName 2>&1
 if ($rgExists -eq "false") {
-    Write-Host "⚠️  Resource Group '$ResourceGroupName' não encontrado." -ForegroundColor Yellow
+    Write-Host "[AVISO] Resource Group '$ResourceGroupName' nao encontrado." -ForegroundColor Yellow
     Write-Host "   Nenhum recurso para destruir." -ForegroundColor Gray
     exit 0
 }
 
-Write-Host "   ✅ Resource Group encontrado" -ForegroundColor Green
+Write-Host "   [OK] Resource Group encontrado" -ForegroundColor Green
 
 # Verificar recursos específicos antes de deletar
 Write-Host ""
-Write-Host "🔍 Verificando recursos específicos..." -ForegroundColor Yellow
+Write-Host "- Verificando recursos especificos..." -ForegroundColor Yellow
 
 # Verificar Function App
 $oldErrorAction = $ErrorActionPreference
@@ -99,9 +99,9 @@ $ErrorActionPreference = "Continue"
 $functionExists = az functionapp show --name $functionAppName --resource-group $ResourceGroupName --query "name" -o tsv 2>&1
 $ErrorActionPreference = $oldErrorAction
 if ($LASTEXITCODE -eq 0 -and $functionExists) {
-    Write-Host "   ✅ Function App encontrada: $functionAppName" -ForegroundColor Green
+    Write-Host "   [OK] Function App encontrada: $functionAppName" -ForegroundColor Green
 } else {
-    Write-Host "   ⚠️  Function App não encontrada: $functionAppName" -ForegroundColor Yellow
+    Write-Host "   [AVISO] Function App nao encontrada: $functionAppName" -ForegroundColor Yellow
 }
 
 # Verificar Storage Account
@@ -109,35 +109,35 @@ $ErrorActionPreference = "Continue"
 $storageExists = az storage account show --name $storageAccountName --resource-group $ResourceGroupName --query "name" -o tsv 2>&1
 $ErrorActionPreference = $oldErrorAction
 if ($LASTEXITCODE -eq 0 -and $storageExists) {
-    Write-Host "   ✅ Storage Account encontrado: $storageAccountName" -ForegroundColor Green
+    Write-Host "   [OK] Storage Account encontrado: $storageAccountName" -ForegroundColor Green
 } else {
-    Write-Host "   ⚠️  Storage Account não encontrado no Resource Group: $storageAccountName" -ForegroundColor Yellow
+    Write-Host "   [AVISO] Storage Account nao encontrado no Resource Group: $storageAccountName" -ForegroundColor Yellow
     # Verificar se existe em outro Resource Group (Storage Account names são únicos globalmente)
     $ErrorActionPreference = "Continue"
     $storageGlobalCheck = az storage account show --name $storageAccountName --query "resourceGroup" -o tsv 2>&1
     $ErrorActionPreference = $oldErrorAction
     if ($LASTEXITCODE -eq 0 -and $storageGlobalCheck -and $storageGlobalCheck -ne $ResourceGroupName) {
-        Write-Host "   ⚠️  Storage Account existe em outro Resource Group: $storageGlobalCheck" -ForegroundColor Yellow
-        Write-Host "      Você precisará deletá-lo manualmente ou usar o Resource Group correto" -ForegroundColor Gray
+        Write-Host "   [AVISO] Storage Account existe em outro Resource Group: $storageGlobalCheck" -ForegroundColor Yellow
+        Write-Host "      Voce precisara deleta-lo manualmente ou usar o Resource Group correto" -ForegroundColor Gray
     }
 }
 
 # Listar recursos no Resource Group
 Write-Host ""
-Write-Host "📦 Recursos encontrados no Resource Group:" -ForegroundColor Cyan
+Write-Host "- Recursos encontrados no Resource Group:" -ForegroundColor Cyan
 az resource list --resource-group $ResourceGroupName --output table --query '[].{Nome:name, Tipo:type, Localizacao:location}' 2>&1 | Out-Null
 Write-Host ""
 
 # Confirmação
 if (-not $Force) {
-    Write-Host "⚠️  ATENÇÃO: Esta operação é IRREVERSÍVEL!" -ForegroundColor Red
-    Write-Host "   Todos os dados serão perdidos permanentemente." -ForegroundColor Red
+    Write-Host "[AVISO] ATENCAO: Esta operacao e IRREVERSIVEL!" -ForegroundColor Red
+    Write-Host "   Todos os dados serao perdidos permanentemente." -ForegroundColor Red
     Write-Host ""
     $confirmation = Read-Host "Digite 'SIM' para confirmar a destruição"
     
     if ($confirmation -ne "SIM") {
         Write-Host ""
-        Write-Host "❌ Operação cancelada pelo usuário." -ForegroundColor Yellow
+        Write-Host "[CANCELADO] Operacao cancelada pelo usuario." -ForegroundColor Yellow
         exit 0
     }
     Write-Host ""
@@ -145,53 +145,53 @@ if (-not $Force) {
 
 # Opção 1: Deletar apenas o Resource Group (mais rápido - deleta tudo automaticamente)
 if ($DeleteResourceGroupOnly) {
-    Write-Host "🗑️  Deletando Resource Group (isso deletará todos os recursos dentro dele)..." -ForegroundColor Yellow
+    Write-Host "- Deletando Resource Group (isso deletara todos os recursos dentro dele)..." -ForegroundColor Yellow
     Write-Host "   Isso pode levar alguns minutos..." -ForegroundColor Gray
     
     az group delete --name $ResourceGroupName --yes --no-wait 2>&1 | Out-Null
     
     if ($LASTEXITCODE -eq 0) {
-        Write-Host "   ✅ Comando de exclusão iniciado" -ForegroundColor Green
+        Write-Host "   [OK] Comando de exclusao iniciado" -ForegroundColor Green
         Write-Host ""
-        Write-Host "   ⏳ O Resource Group está sendo deletado em background." -ForegroundColor Yellow
-        Write-Host "   Você pode verificar o status no Azure Portal ou com:" -ForegroundColor Gray
+        Write-Host "   - O Resource Group esta sendo deletado em background." -ForegroundColor Yellow
+        Write-Host "   Voce pode verificar o status no Azure Portal ou com:" -ForegroundColor Gray
         Write-Host "   az group show --name $ResourceGroupName" -ForegroundColor Gray
     } else {
-        Write-Host "   ❌ Erro ao iniciar exclusão do Resource Group" -ForegroundColor Red
+        Write-Host "   [ERRO] Erro ao iniciar exclusao do Resource Group" -ForegroundColor Red
         exit 1
     }
 } else {
     # Opção 2: Deletar recursos individualmente (mais controle)
     
     # 1. Deletar Function App (isso também remove Application Settings automaticamente)
-    Write-Host "🗑️  Deletando Function App: $functionAppName" -ForegroundColor Yellow
-    Write-Host "   (Application Settings serão removidas automaticamente)" -ForegroundColor Gray
+    Write-Host "- Deletando Function App: $functionAppName" -ForegroundColor Yellow
+    Write-Host "   (Application Settings serao removidas automaticamente)" -ForegroundColor Gray
     $oldErrorAction = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
     $functionExists = az functionapp show --name $functionAppName --resource-group $ResourceGroupName --query "name" -o tsv 2>&1
     $ErrorActionPreference = $oldErrorAction
     if ($LASTEXITCODE -eq 0 -and $functionExists) {
-        az functionapp delete --name $functionAppName --resource-group $ResourceGroupName --yes 2>&1 | Out-Null
+        az functionapp delete --name $functionAppName --resource-group $ResourceGroupName 2>&1 | Out-Null
         if ($LASTEXITCODE -eq 0) {
-            Write-Host "   ✅ Function App deletada (incluindo Application Settings)" -ForegroundColor Green
+            Write-Host "   [OK] Function App deletada (incluindo Application Settings)" -ForegroundColor Green
         } else {
-            Write-Host "   ⚠️  Aviso: Erro ao deletar Function App" -ForegroundColor Yellow
+            Write-Host "   [AVISO] Aviso: Erro ao deletar Function App" -ForegroundColor Yellow
         }
     } else {
-        Write-Host "   ⚠️  Function App não encontrada (pode já ter sido deletada)" -ForegroundColor Yellow
+        Write-Host "   [AVISO] Function App nao encontrada (pode ja ter sido deletada)" -ForegroundColor Yellow
     }
     
     # 2. Deletar Storage Account (incluindo containers e tabelas)
     Write-Host ""
-    Write-Host "🗑️  Deletando Storage Account: $storageAccountName" -ForegroundColor Yellow
-    Write-Host "   (Containers, tabelas e dados serão removidos)" -ForegroundColor Gray
+    Write-Host "- Deletando Storage Account: $storageAccountName" -ForegroundColor Yellow
+    Write-Host "   (Containers, tabelas e dados serao removidos)" -ForegroundColor Gray
     $oldErrorAction = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
     $storageExists = az storage account show --name $storageAccountName --resource-group $ResourceGroupName --query "name" -o tsv 2>&1
     $ErrorActionPreference = $oldErrorAction
     if ($LASTEXITCODE -eq 0 -and $storageExists) {
         # Tentar obter connection string para deletar containers antes de deletar o Storage Account
-        Write-Host "   Preparando exclusão..." -ForegroundColor Gray
+        Write-Host "   Preparando exclusao..." -ForegroundColor Gray
         $oldErrorAction = $ErrorActionPreference
         $ErrorActionPreference = "Continue"
         $storageConnectionString = az storage account show-connection-string --name $storageAccountName --resource-group $ResourceGroupName --query connectionString -o tsv 2>&1
@@ -214,7 +214,7 @@ if ($DeleteResourceGroupOnly) {
                     az storage container delete --name $_ --account-name $storageAccountName --connection-string $storageConnectionString --yes 2>&1 | Out-Null
                     $ErrorActionPreference = $oldErrorAction
                     if ($LASTEXITCODE -eq 0) {
-                        Write-Host "         ✅ Container '$_' deletado" -ForegroundColor Green
+                        Write-Host "         [OK] Container '$_' deletado" -ForegroundColor Green
                     }
                 }
             } else {
@@ -229,39 +229,39 @@ if ($DeleteResourceGroupOnly) {
         az storage account delete --name $storageAccountName --resource-group $ResourceGroupName --yes 2>&1 | Out-Null
         $ErrorActionPreference = $oldErrorAction
         if ($LASTEXITCODE -eq 0) {
-            Write-Host "   ✅ Storage Account deletado (containers e tabelas removidos)" -ForegroundColor Green
+            Write-Host "   [OK] Storage Account deletado (containers e tabelas removidos)" -ForegroundColor Green
         } else {
-            Write-Host "   ⚠️  Aviso: Erro ao deletar Storage Account" -ForegroundColor Yellow
+            Write-Host "   [AVISO] Aviso: Erro ao deletar Storage Account" -ForegroundColor Yellow
         }
     } else {
-        Write-Host "   ⚠️  Storage Account não encontrado no Resource Group (pode já ter sido deletado)" -ForegroundColor Yellow
+        Write-Host "   [AVISO] Storage Account nao encontrado no Resource Group (pode ja ter sido deletado)" -ForegroundColor Yellow
     }
     
     # 3. Deletar Resource Group (remove qualquer recurso restante)
     Write-Host ""
-    Write-Host "🗑️  Deletando Resource Group: $ResourceGroupName" -ForegroundColor Yellow
-    Write-Host "   Isso removerá qualquer recurso restante..." -ForegroundColor Gray
+    Write-Host "- Deletando Resource Group: $ResourceGroupName" -ForegroundColor Yellow
+    Write-Host "   Isso removera qualquer recurso restante..." -ForegroundColor Gray
     
     az group delete --name $ResourceGroupName --yes --no-wait 2>&1 | Out-Null
     
     if ($LASTEXITCODE -eq 0) {
-        Write-Host "   ✅ Comando de exclusão do Resource Group iniciado" -ForegroundColor Green
+        Write-Host "   [OK] Comando de exclusao do Resource Group iniciado" -ForegroundColor Green
     } else {
-        Write-Host "   ⚠️  Aviso: Erro ao iniciar exclusão do Resource Group" -ForegroundColor Yellow
+        Write-Host "   [AVISO] Aviso: Erro ao iniciar exclusao do Resource Group" -ForegroundColor Yellow
     }
 }
 
 # Resumo final
 Write-Host ""
 Write-Host "============================================================" -ForegroundColor Green
-Write-Host "✅ PROCESSO DE DESTRUIÇÃO INICIADO!" -ForegroundColor Green
+Write-Host "[OK] PROCESSO DE DESTRUICAO INICIADO!" -ForegroundColor Green
 Write-Host "============================================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "📋 Resumo:" -ForegroundColor Cyan
+Write-Host "- Resumo:" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Resource Group:" -ForegroundColor White
 Write-Host "  Nome: $ResourceGroupName" -ForegroundColor Gray
-Write-Host "  Status: Exclusão iniciada" -ForegroundColor Gray
+Write-Host "  Status: Exclusao iniciada" -ForegroundColor Gray
 Write-Host ""
 Write-Host "Function App:" -ForegroundColor White
 Write-Host "  Nome: $functionAppName" -ForegroundColor Gray
@@ -277,11 +277,11 @@ if (-not $DeleteResourceGroupOnly) {
     Write-Host "  Tabela removida: feedbacks" -ForegroundColor Gray
 }
 Write-Host ""
-Write-Host "💡 Notas:" -ForegroundColor Yellow
-Write-Host "  - A exclusão do Resource Group pode levar alguns minutos" -ForegroundColor White
-Write-Host "  - Você pode verificar o status no Azure Portal" -ForegroundColor White
+Write-Host "- Notas:" -ForegroundColor Yellow
+    Write-Host "  - A exclusao do Resource Group pode levar alguns minutos" -ForegroundColor White
+    Write-Host "  - Voce pode verificar o status no Azure Portal" -ForegroundColor White
 Write-Host "  - Para verificar via CLI:" -ForegroundColor White
 Write-Host "    az group show --name $ResourceGroupName" -ForegroundColor Gray
 Write-Host ""
-Write-Host "📖 Consulte GUIA_DEPLOY_AZURE.md para recriar recursos" -ForegroundColor Cyan
+Write-Host "[DOC] Consulte GUIA_DEPLOY_AZURE.md para recriar recursos" -ForegroundColor Cyan
 Write-Host ""
