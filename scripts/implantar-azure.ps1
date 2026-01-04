@@ -278,10 +278,10 @@ if ($functionAppLocation) {
 }
 Write-Host ""
 
-# Deploy via Azure CLI (mais confiável que plugin Maven para Consumption Plans)
+# Deploy via Azure Functions Core Tools (mais confiável para funções Java)
+# O deploy via ZIP (az functionapp deployment source config-zip) não registra funções Java corretamente
 # O plugin Maven 1.30.0 tem bugs conhecidos com Consumption Plans
 $deployPath = "target\azure-functions\$FunctionAppName"
-$zipPath = "$deployPath.zip"
 
 # Verificar se o diretório de deploy existe
 if (-not (Test-Path $deployPath)) {
@@ -290,100 +290,51 @@ if (-not (Test-Path $deployPath)) {
     Exit-Script 1
 }
 
-Write-Host "Criando pacote ZIP para deploy..." -ForegroundColor Yellow
-
-# Aguardar um pouco para garantir que processos Java/Maven terminem e liberem arquivos
-Write-Host "   Aguardando liberacao de arquivos..." -ForegroundColor Gray
-Start-Sleep -Seconds 2
-
-# Remover ZIP anterior se existir
-if (Test-Path $zipPath) {
-    Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
-}
-
-# Criar ZIP do pacote de deploy com retry em caso de arquivo em uso
-$maxRetries = 3
-$retryDelay = 2
-$zipCreated = $false
-
-for ($attempt = 1; $attempt -le $maxRetries; $attempt++) {
-    try {
-        if ($attempt -gt 1) {
-            Write-Host "   Tentativa $attempt de $maxRetries..." -ForegroundColor Yellow
-            Start-Sleep -Seconds $retryDelay
-        }
-        
-        # Usar .NET ZipFile para melhor controle e evitar problemas de arquivo em uso
-        Add-Type -AssemblyName System.IO.Compression.FileSystem
-        [System.IO.Compression.ZipFile]::CreateFromDirectory($deployPath, $zipPath, [System.IO.Compression.CompressionLevel]::Optimal, $false)
-        
-        Write-Host "   [OK] Pacote ZIP criado: $zipPath" -ForegroundColor Green
-        $zipCreated = $true
-        break
-    } catch {
-        if ($attempt -eq $maxRetries) {
-            Write-Host "[ERRO] Falha ao criar pacote ZIP apos $maxRetries tentativas" -ForegroundColor Red
-            Write-Host "   Erro: $_" -ForegroundColor Red
-            Write-Host ""
-            Write-Host "   Possiveis solucoes:" -ForegroundColor Yellow
-            Write-Host "   1. Feche qualquer processo Java/Maven que possa estar usando os arquivos" -ForegroundColor White
-            Write-Host "   2. Aguarde alguns segundos e tente novamente" -ForegroundColor White
-            Write-Host "   3. Tente criar o ZIP manualmente:" -ForegroundColor White
-            Write-Host "      Compress-Archive -Path `"$deployPath\*`" -DestinationPath `"$zipPath`" -Force" -ForegroundColor Gray
-            Exit-Script 1
-        }
-        Write-Host "   [AVISO] Tentativa $attempt falhou, aguardando..." -ForegroundColor Yellow
-    }
-}
-
-if (-not $zipCreated) {
-    Write-Host "[ERRO] Nao foi possivel criar o pacote ZIP" -ForegroundColor Red
+# Verificar se Azure Functions Core Tools está instalado
+if (-not (Get-Command func -ErrorAction SilentlyContinue)) {
+    Write-Host "[ERRO] Azure Functions Core Tools nao encontrado" -ForegroundColor Red
+    Write-Host "   Instale em: https://aka.ms/installazurefunctionstools" -ForegroundColor Yellow
+    Write-Host "   Ou use: npm install -g azure-functions-core-tools@4 --unsafe-perm true" -ForegroundColor Gray
     Exit-Script 1
 }
+Write-Host "   [OK] Azure Functions Core Tools encontrado" -ForegroundColor Green
 
 Write-Host ""
-Write-Host "Fazendo deploy via Azure CLI..." -ForegroundColor Yellow
+Write-Host "Fazendo deploy via Azure Functions Core Tools..." -ForegroundColor Yellow
 Write-Host "   Function App: $FunctionAppName" -ForegroundColor Gray
 Write-Host "   Resource Group: $ResourceGroup" -ForegroundColor Gray
-Write-Host "   Pacote: $zipPath" -ForegroundColor Gray
+Write-Host "   Diretorio: $deployPath" -ForegroundColor Gray
 Write-Host ""
 
-# Fazer deploy usando Azure CLI
-az functionapp deployment source config-zip `
-    --resource-group $ResourceGroup `
-    --name $FunctionAppName `
-    --src $zipPath
-
-if ($LASTEXITCODE -ne 0) {
-    Write-Host ""
-    Write-Host "[ERRO] Erro ao fazer deploy via Azure CLI" -ForegroundColor Red
-    Write-Host ""
-    Write-Host "Possiveis solucoes:" -ForegroundColor Yellow
-    Write-Host "   1. Verifique se a Function App existe:" -ForegroundColor White
-    Write-Host "      az functionapp show --name $FunctionAppName --resource-group $ResourceGroup" -ForegroundColor Gray
-    Write-Host ""
-    Write-Host "   2. Verifique se esta logado:" -ForegroundColor White
-    Write-Host "      az account show" -ForegroundColor Gray
-    Write-Host ""
-    Write-Host "   3. Verifique se o pacote ZIP foi criado corretamente:" -ForegroundColor White
-    Write-Host "      Test-Path $zipPath" -ForegroundColor Gray
-    Write-Host ""
-    Write-Host "   4. Tente fazer deploy manualmente:" -ForegroundColor White
-    Write-Host "      az functionapp deployment source config-zip --resource-group $ResourceGroup --name $FunctionAppName --src $zipPath" -ForegroundColor Gray
-    Write-Host ""
+# Mudar para o diretório de deploy e fazer deploy
+Push-Location $deployPath
+try {
+    func azure functionapp publish $FunctionAppName --java
     
-    # Limpar ZIP em caso de erro
-    if (Test-Path $zipPath) {
-        Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host ""
+        Write-Host "[ERRO] Erro ao fazer deploy via Azure Functions Core Tools" -ForegroundColor Red
+        Write-Host ""
+        Write-Host "Possiveis solucoes:" -ForegroundColor Yellow
+        Write-Host "   1. Verifique se a Function App existe:" -ForegroundColor White
+        Write-Host "      az functionapp show --name $FunctionAppName --resource-group $ResourceGroup" -ForegroundColor Gray
+        Write-Host ""
+        Write-Host "   2. Verifique se esta logado no Azure:" -ForegroundColor White
+        Write-Host "      az account show" -ForegroundColor Gray
+        Write-Host ""
+        Write-Host "   3. Verifique se o diretorio de deploy existe:" -ForegroundColor White
+        Write-Host "      Test-Path $deployPath" -ForegroundColor Gray
+        Write-Host ""
+        Write-Host "   4. Tente fazer deploy manualmente:" -ForegroundColor White
+        Write-Host "      cd $deployPath" -ForegroundColor Gray
+        Write-Host "      func azure functionapp publish $FunctionAppName --java" -ForegroundColor Gray
+        Write-Host ""
+        
+        Pop-Location
+        Exit-Script 1
     }
-    
-    Exit-Script 1
-}
-
-# Limpar ZIP após deploy bem-sucedido
-if (Test-Path $zipPath) {
-    Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
-    Write-Host "   [OK] Arquivo ZIP temporario removido" -ForegroundColor Gray
+} finally {
+    Pop-Location
 }
 
 Write-Host ""
