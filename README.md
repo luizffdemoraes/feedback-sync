@@ -784,6 +784,45 @@ docker-compose down -v
 
 ## 🚀 Deploy no Azure
 
+### ⚡ Passo a Passo Rápido
+
+Siga estes passos **na ordem** para fazer deploy completo:
+
+1. **Criar Recursos Azure:**
+   ```powershell
+   .\scripts\criar-recursos-azure.ps1
+   ```
+   Ou com Mailtrap:
+   ```powershell
+   .\scripts\criar-recursos-azure.ps1 -MailtrapApiToken "token" -MailtrapInboxId "id" -AdminEmail "email@exemplo.com"
+   ```
+
+2. **Configurar Storage Connection String:**
+   ```powershell
+   .\scripts\configurar-storage-connection.ps1
+   ```
+
+3. **Verificar Variáveis de Ambiente:**
+   ```powershell
+   .\scripts\verificar-variaveis-cloud.ps1
+   ```
+
+4. **Fazer Deploy:**
+   ```powershell
+   .\scripts\implantar-azure.ps1
+   ```
+
+5. **Testar:**
+   ```bash
+   curl --location 'https://feedback-function-prod.azurewebsites.net/api/avaliacao' \
+   --header 'Content-Type: application/json' \
+   --data '{"descricao":"Teste","nota":2,"urgencia":"HIGH"}'
+   ```
+
+**📖 Para mais detalhes, consulte:** [GUIA_DEPLOY_AZURE.md](GUIA_DEPLOY_AZURE.md)
+
+---
+
 ### Pré-requisitos
 
 1. **Azure CLI instalado e configurado**
@@ -792,20 +831,38 @@ docker-compose down -v
    az login
    ```
 
-### Deploy Automatizado
+### Deploy Automatizado (Detalhado)
 
-Execute o script de deploy:
+**Ordem de execução dos scripts:**
 
-```powershell
-.\scripts\implantar-azure.ps1
-```
+1. **Criar Recursos Azure:**
+   ```powershell
+   .\scripts\criar-recursos-azure.ps1
+   ```
+   - Cria Resource Group, Storage Account e Function App
+   - Configura variáveis de ambiente básicas
+   - Opcional: Configura Mailtrap se parâmetros fornecidos
 
-O script irá:
-1. Criar Resource Group
-2. Criar Storage Account (Table + Blob)
-3. Criar Function App
-4. Configurar Application Settings (incluindo Mailtrap API Token e Inbox ID)
-5. Fazer deploy da aplicação
+2. **Configurar Storage Connection String:**
+   ```powershell
+   .\scripts\configurar-storage-connection.ps1
+   ```
+   - Verifica e configura `AZURE_STORAGE_CONNECTION_STRING`
+   - Usa `AzureWebJobsStorage` como fallback se disponível
+
+3. **Verificar Configurações:**
+   ```powershell
+   .\scripts\verificar-variaveis-cloud.ps1
+   ```
+   - Verifica se todas as variáveis estão configuradas
+   - Diagnostica o fluxo completo
+
+4. **Fazer Deploy:**
+   ```powershell
+   .\scripts\implantar-azure.ps1
+   ```
+   - Compila o projeto
+   - Faz deploy para a Function App
 
 **🌍 Região Azure**: Por padrão, todos os recursos são criados na região **`northcentralus`** (North Central US). Esta região foi escolhida por ser compatível com assinaturas Azure for Students. Se precisar usar outra região, especifique o parâmetro `-Location` ao executar o script.
 

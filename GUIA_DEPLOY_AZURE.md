@@ -6,14 +6,220 @@ Este guia detalha todos os passos necessários para instalar, configurar e fazer
 
 ## 📋 Índice
 
-1. [Pré-requisitos](#pré-requisitos)
-2. [Recursos Azure Necessários](#recursos-azure-necessários)
-3. [Instalação e Configuração](#instalação-e-configuração)
-4. [Criação dos Recursos Azure](#criação-dos-recursos-azure)
-5. [Configuração da Aplicação](#configuração-da-aplicação)
-6. [Deploy da Aplicação](#deploy-da-aplicação)
-7. [Validação e Testes](#validação-e-testes)
-8. [Troubleshooting](#troubleshooting)
+1. [🚀 Passo a Passo Rápido (Ordem de Execução)](#-passo-a-passo-rápido-ordem-de-execução)
+2. [Pré-requisitos](#pré-requisitos)
+3. [Recursos Azure Necessários](#recursos-azure-necessários)
+4. [Instalação e Configuração](#instalação-e-configuração)
+5. [Criação dos Recursos Azure](#criação-dos-recursos-azure)
+6. [Configuração da Aplicação](#configuração-da-aplicação)
+7. [Deploy da Aplicação](#deploy-da-aplicação)
+8. [Validação e Testes](#validação-e-testes)
+9. [Troubleshooting](#troubleshooting)
+
+---
+
+## 🚀 Passo a Passo Rápido (Ordem de Execução)
+
+Siga estes passos **na ordem** para configurar e fazer deploy da aplicação no Azure:
+
+### **Passo 1: Criar Recursos Azure**
+
+Execute o script para criar todos os recursos necessários (Resource Group, Storage Account, Function App):
+
+```powershell
+.\scripts\criar-recursos-azure.ps1
+```
+
+**Opção com Mailtrap (recomendado):**
+```powershell
+.\scripts\criar-recursos-azure.ps1 `
+    -MailtrapApiToken "seu-token" `
+    -MailtrapInboxId "seu-inbox-id" `
+    -AdminEmail "seu-email@exemplo.com"
+```
+
+**O que este script faz:**
+- ✅ Cria Resource Group (`feedback-rg`)
+- ✅ Cria Storage Account (`feedbackstorage<sufixo>`)
+- ✅ Cria Function App (`feedback-function-prod`)
+- ✅ Configura variáveis de ambiente básicas
+- ✅ Configura Mailtrap (se parâmetros fornecidos)
+
+**⏱️ Tempo estimado:** 3-5 minutos
+
+---
+
+### **Passo 2: Configurar Storage Connection String**
+
+Se `AZURE_STORAGE_CONNECTION_STRING` não foi configurada automaticamente, execute:
+
+```powershell
+.\scripts\configurar-storage-connection.ps1
+```
+
+**O que este script faz:**
+- ✅ Verifica se `AZURE_STORAGE_CONNECTION_STRING` está configurada
+- ✅ Se não estiver, usa `AzureWebJobsStorage` como fallback
+- ✅ Se não encontrar, obtém connection string do Storage Account
+- ✅ Configura ambas as variáveis na Function App
+
+**⏱️ Tempo estimado:** 30 segundos
+
+---
+
+### **Passo 3: Configurar Mailtrap (se não foi feito no Passo 1)**
+
+Se você não forneceu as credenciais do Mailtrap no Passo 1, configure agora:
+
+```powershell
+az functionapp config appsettings set `
+    --name feedback-function-prod `
+    --resource-group feedback-rg `
+    --settings `
+        "MAILTRAP_API_TOKEN=seu-token" `
+        "ADMIN_EMAIL=seu-email@exemplo.com" `
+        "MAILTRAP_INBOX_ID=seu-inbox-id"
+```
+
+**Como obter credenciais do Mailtrap:**
+1. Acesse: https://mailtrap.io
+2. Crie uma conta gratuita
+3. Vá em **Settings > API Tokens** e gere um token
+4. Vá em **Settings > Inboxes** e copie o **Inbox ID**
+
+**⏱️ Tempo estimado:** 2 minutos
+
+---
+
+### **Passo 4: Verificar Variáveis de Ambiente**
+
+Verifique se todas as variáveis estão configuradas corretamente:
+
+```powershell
+.\scripts\verificar-variaveis-cloud.ps1
+```
+
+**O que este script verifica:**
+- ✅ Variáveis obrigatórias (Storage, Runtime)
+- ✅ Variáveis do Mailtrap (para envio de email)
+- ✅ Diagnóstico do fluxo completo
+
+**Resultado esperado:**
+```
+[OK] Todas as variáveis obrigatórias estão configuradas!
+[OK] Mailtrap configurado - Emails serão enviados corretamente
+
+Fluxo de Feedback:
+   1. Recebimento de feedback (POST /api/avaliacao): [OK]
+   2. Salvamento no Table Storage: [OK]
+   3. Publicação na fila (feedbacks críticos): [OK]
+   4. Envio de email via Mailtrap: [OK]
+```
+
+**⏱️ Tempo estimado:** 10 segundos
+
+---
+
+### **Passo 5: Fazer Deploy da Aplicação**
+
+Compile e faça deploy da aplicação para a Function App:
+
+```powershell
+.\scripts\implantar-azure.ps1
+```
+
+**O que este script faz:**
+- ✅ Compila o projeto (`mvn clean package`)
+- ✅ Faz deploy via Azure Functions Core Tools
+- ✅ Registra todas as funções na Function App
+
+**⏱️ Tempo estimado:** 2-3 minutos
+
+---
+
+### **Passo 6: Testar a Aplicação**
+
+Teste o endpoint de avaliação:
+
+```bash
+curl --location 'https://feedback-function-prod.azurewebsites.net/api/avaliacao' \
+--header 'Content-Type: application/json' \
+--data '{
+    "descricao": "Aula muito confusa, não consegui entender o conteúdo. Preciso de ajuda urgente!",
+    "nota": 2,
+    "urgencia": "HIGH"
+}'
+```
+
+**Resposta esperada (sucesso):**
+```json
+{
+    "id": "uuid-do-feedback",
+    "status": "recebido"
+}
+```
+
+**Teste também o health check:**
+```bash
+curl --location 'https://feedback-function-prod.azurewebsites.net/api/health'
+```
+
+**⏱️ Tempo estimado:** 1 minuto
+
+---
+
+### **Passo 7: Verificar Logs e Email**
+
+**Verificar logs em tempo real:**
+```powershell
+az functionapp log tail --name feedback-function-prod --resource-group feedback-rg
+```
+
+**Verificar email no Mailtrap:**
+1. Acesse: https://mailtrap.io
+2. Vá em **Inboxes** e selecione sua inbox
+3. Você deve ver o email de notificação para feedbacks críticos (nota ≤ 3)
+
+**⏱️ Tempo estimado:** 2 minutos
+
+---
+
+## ✅ Checklist de Validação
+
+Após seguir todos os passos, verifique:
+
+- [ ] ✅ Recursos Azure criados (Resource Group, Storage Account, Function App)
+- [ ] ✅ `AZURE_STORAGE_CONNECTION_STRING` configurada
+- [ ] ✅ `AzureWebJobsStorage` configurada
+- [ ] ✅ `MAILTRAP_API_TOKEN` configurado
+- [ ] ✅ `ADMIN_EMAIL` configurado
+- [ ] ✅ `MAILTRAP_INBOX_ID` configurado
+- [ ] ✅ Deploy realizado com sucesso
+- [ ] ✅ Endpoint `/api/health` retorna 200 OK
+- [ ] ✅ Endpoint `/api/avaliacao` retorna 201 Created
+- [ ] ✅ Email recebido no Mailtrap para feedbacks críticos
+
+---
+
+## 🔄 Resumo da Ordem de Execução
+
+```
+1. .\scripts\criar-recursos-azure.ps1
+   ↓
+2. .\scripts\configurar-storage-connection.ps1
+   ↓
+3. Configurar Mailtrap (se não foi feito no passo 1)
+   ↓
+4. .\scripts\verificar-variaveis-cloud.ps1
+   ↓
+5. .\scripts\implantar-azure.ps1
+   ↓
+6. Testar endpoints
+   ↓
+7. Verificar logs e emails
+```
+
+**⏱️ Tempo total estimado:** 10-15 minutos
 
 ---
 
@@ -232,30 +438,43 @@ O script configura automaticamente:
 
 ## 🔧 Configuração da Aplicação
 
-### 1. Obter Connection Strings
+### 1. Configurar Storage Connection String (Automático)
 
-Após criar os recursos, obtenha as connection strings:
+**Recomendado:** Use o script automatizado que descobre tudo automaticamente:
 
 ```powershell
-# Storage Account Connection String
+.\scripts\configurar-storage-connection.ps1
+```
+
+**O que o script faz:**
+- ✅ Descobre Resource Group, Function App e Storage Account automaticamente
+- ✅ Verifica se `AZURE_STORAGE_CONNECTION_STRING` já está configurada
+- ✅ Se não estiver, usa `AzureWebJobsStorage` como fallback (mais rápido)
+- ✅ Se não encontrar, obtém connection string diretamente do Storage Account
+- ✅ Configura ambas as variáveis na Function App
+
+**Opção Manual (se necessário):**
+
+Se preferir configurar manualmente:
+
+```powershell
+# Obter Connection String do Storage Account
 $storageAccountName = "feedbackstorage<seu-sufixo>"
 $storageConnectionString = az storage account show-connection-string `
     --name $storageAccountName `
     --resource-group "feedback-rg" `
     --query connectionString -o tsv
 
-Write-Host "Storage Connection String:" -ForegroundColor Cyan
-Write-Host $storageConnectionString -ForegroundColor White
-Write-Host "`n📧 Mailtrap Configuration:" -ForegroundColor Cyan
-Write-Host "  Configure manualmente no Azure Portal:" -ForegroundColor White
-Write-Host "  - MAILTRAP_API_TOKEN: <seu-token>" -ForegroundColor Gray
-Write-Host "  - MAILTRAP_INBOX_ID: <seu-inbox-id>" -ForegroundColor Gray
-Write-Host "  - ADMIN_EMAIL: <admin@exemplo.com>" -ForegroundColor Gray
+# Configurar na Function App
+az functionapp config appsettings set `
+    --name feedback-function-prod `
+    --resource-group feedback-rg `
+    --settings "AZURE_STORAGE_CONNECTION_STRING=$storageConnectionString"
 ```
 
-### 2. Configurar Application Settings na Function App
+### 2. Configurar Mailtrap (se não foi feito no Passo 1)
 
-**Se você usou o script com os parâmetros do Mailtrap**, as variáveis já estarão configuradas automaticamente. Pule para a seção de Deploy.
+**Se você usou o script `criar-recursos-azure.ps1` com os parâmetros do Mailtrap**, as variáveis já estarão configuradas automaticamente. Pule para a seção de Deploy.
 
 **Se você não forneceu os parâmetros do Mailtrap**, configure manualmente:
 
