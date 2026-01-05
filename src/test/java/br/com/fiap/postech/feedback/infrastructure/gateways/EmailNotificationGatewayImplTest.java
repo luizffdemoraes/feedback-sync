@@ -84,7 +84,7 @@ class EmailNotificationGatewayImplTest {
     }
 
     @Test
-    @DisplayName("Deve retornar silenciosamente quando Mailtrap não está disponível e API token está vazio")
+    @DisplayName("Deve lançar NotificationException quando Mailtrap não está disponível e API token está vazio")
     void deveRetornarSilenciosamenteQuandoMailtrapNaoDisponivelEApiTokenVazio() {
         String message = "Mensagem de teste";
         
@@ -95,7 +95,14 @@ class EmailNotificationGatewayImplTest {
         );
         gatewaySemToken.setMailtrapClient(null);
 
-        assertDoesNotThrow(() -> gatewaySemToken.sendAdminNotification(message));
+        NotificationException exception = assertThrows(
+            NotificationException.class,
+            () -> gatewaySemToken.sendAdminNotification(message)
+        );
+
+        assertTrue(exception.getMessage().contains("Mailtrap nao configurado completamente"));
+        assertTrue(exception.getMessage().contains("MAILTRAP_API_TOKEN"));
+        assertTrue(exception.getMessage().contains("MAILTRAP_INBOX_ID"));
     }
 
     @Test

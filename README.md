@@ -210,7 +210,8 @@ feedback-sync/
 │   ├── executar-aplicacao.ps1            # Executa aplicação localmente
 │   ├── executar-azure-functions-local.ps1 # Executa Azure Functions localmente
 │   ├── testar-aplicacao.ps1             # Testa aplicação completa
-│   └── verificar-variaveis-ambiente.ps1  # Verifica variáveis locais
+│   ├── verificar-variaveis-ambiente.ps1  # Verifica variáveis locais
+│   └── verificar-dados-azure.ps1        # Verifica relatórios e dados no Azure
 ├── collection/                          # Postman Collections
 ├── docker-compose.yml                   # Emuladores Azure locais
 ├── pom.xml
@@ -830,6 +831,69 @@ Siga estes passos **na ordem** para fazer deploy completo:
 ### Deploy Manual
 
 Consulte o guia completo: **[GUIA_DEPLOY_AZURE.md](./GUIA_DEPLOY_AZURE.md)**
+
+---
+
+## 🔍 Verificar Dados no Azure
+
+Após fazer deploy e executar a aplicação, você pode verificar os relatórios gerados e os dados salvos na tabela usando o script de verificação:
+
+### Verificação Básica
+
+```powershell
+.\scripts\verificar-dados-azure.ps1
+```
+
+Este comando mostra:
+- ✅ Lista de relatórios semanais disponíveis no Blob Storage
+- ✅ Estatísticas dos feedbacks salvos na tabela
+- ✅ Distribuição por score e urgência
+- ✅ Média de avaliações
+
+### Verificação Detalhada
+
+Para ver o conteúdo completo do relatório mais recente:
+
+```powershell
+.\scripts\verificar-dados-azure.ps1 -ShowReportContent
+```
+
+Para ver os dados completos da tabela:
+
+```powershell
+.\scripts\verificar-dados-azure.ps1 -ShowTableData
+```
+
+Para ver tudo:
+
+```powershell
+.\scripts\verificar-dados-azure.ps1 -ShowReportContent -ShowTableData
+```
+
+### Parâmetros Disponíveis
+
+| Parâmetro | Descrição | Padrão |
+|-----------|-----------|--------|
+| `-FunctionAppName` | Nome da Function App | `feedback-function-prod` |
+| `-ResourceGroup` | Nome do Resource Group | `feedback-rg` |
+| `-StorageAccountName` | Nome do Storage Account | Detectado automaticamente |
+| `-TableName` | Nome da tabela | `feedbacks` |
+| `-ContainerName` | Nome do container | `weekly-reports` |
+| `-ShowReportContent` | Mostrar conteúdo do relatório | `false` |
+| `-ShowTableData` | Mostrar dados da tabela | `false` |
+| `-MaxTableRows` | Limite de linhas a mostrar | `50` |
+
+### Visualização Alternativa
+
+Se o Azure CLI não conseguir consultar as entidades da tabela diretamente, você pode usar:
+
+1. **Portal do Azure**: 
+   - Acesse: https://portal.azure.com
+   - Navegue até: Storage Account > [seu-storage] > Tables > `feedbacks`
+
+2. **Azure Storage Explorer**:
+   - Instale: https://azure.microsoft.com/features/storage-explorer/
+   - Conecte-se usando a connection string do Storage Account
 
 ---
 

@@ -54,9 +54,21 @@ public class TableStorageFeedbackGatewayImpl implements FeedbackGateway {
     @PostConstruct
     public void init() {
         try {
+            logger.info("Inicializando Table Storage Gateway...");
+            logger.info("  - Table Name: {}", tableName);
+            logger.info("  - Connection String configurada: {}", 
+                storageConnectionString != null && !storageConnectionString.isBlank());
+            
+            if (storageConnectionString == null || storageConnectionString.isBlank()) {
+                throw new FeedbackPersistenceException(
+                    "Connection string do Table Storage não está configurada. Verifique a propriedade azure.storage.connection-string");
+            }
+            
             tableServiceClient = new TableServiceClientBuilder()
                     .connectionString(storageConnectionString)
                     .buildClient();
+            
+            logger.info("TableServiceClient criado com sucesso");
             
             try {
                 tableServiceClient.createTableIfNotExists(tableName);
@@ -71,10 +83,40 @@ public class TableStorageFeedbackGatewayImpl implements FeedbackGateway {
                 }
             }
             
+            // Verificar se a tabela existe antes de criar o TableClient
+            try {
+                tableServiceClient.getTableClient(tableName);
+                logger.info("Verificação de existência da tabela '{}': EXISTE", tableName);
+            } catch (Exception e) {
+                logger.warn("Não foi possível verificar a existência da tabela '{}': {}", tableName, e.getMessage());
+            }
+            
             tableClient = new TableClientBuilder()
                     .connectionString(storageConnectionString)
                     .tableName(tableName)
                     .buildClient();
+            
+            logger.info("TableClient criado com sucesso para a tabela '{}'", tableName);
+            
+            // Testar a conexão tentando listar entidades (mesmo que vazio)
+            try {
+                logger.info("Testando conexão com a tabela '{}'...", tableName);
+                // Apenas verificar se consegue acessar a tabela (não importa se está vazia)
+                tableClient.listEntities().iterator().hasNext(); // Força uma tentativa de acesso
+                logger.info("Conexão com a tabela '{}' testada com sucesso", tableName);
+            } catch (Exception e) {
+                logger.error("ERRO ao testar conexão com a tabela '{}': {}", tableName, e.getMessage(), e);
+                throw new FeedbackPersistenceException(
+                    String.format("Falha ao conectar à tabela '%s': %s", tableName, e.getMessage()), e);
+            }
+            
+            // Verificar se o tableClient foi criado corretamente
+            if (tableClient == null) {
+                throw new FeedbackPersistenceException(
+                    "TableClient não foi criado corretamente. Verifique a connection string e o nome da tabela.");
+            }
+            
+            logger.info("Table Storage Gateway inicializado com sucesso");
 
         } catch (TableServiceException e) {
             logger.error("Erro ao conectar ao Table Storage (TableServiceException). Mensagem: {}", 
@@ -98,23 +140,44 @@ public class TableStorageFeedbackGatewayImpl implements FeedbackGateway {
         validateTableClient();
         
         try {
+            logger.info("Iniciando salvamento de feedback no Table Storage...");
+            logger.info("  - Table Client inicializado: {}", tableClient != null);
+            logger.info("  - Table Name: {}", tableName);
+            
             if (feedback.getId() == null) {
                 feedback.setId(UUID.randomUUID().toString());
+                logger.debug("ID gerado para feedback: {}", feedback.getId());
             }
 
             if (feedback.getCreatedAt() == null) {
                 feedback.setCreatedAt(LocalDateTime.now());
+                logger.debug("CreatedAt definido para feedback: {}", feedback.getCreatedAt());
             }
 
             TableEntity entity = TableStorageFeedbackMapper.toTableEntity(feedback);
-            logger.debug("Salvando entidade no Table Storage: {}", entity.getRowKey());
+            logger.info("Entidade criada - PartitionKey: {}, RowKey: {}", 
+                entity.getPartitionKey(), entity.getRowKey());
+            logger.debug("Propriedades da entidade: {}", entity.getProperties());
             
+            logger.info("Chamando upsertEntity no Table Storage...");
             tableClient.upsertEntity(entity);
+            logger.info("upsertEntity executado com sucesso");
 
-            logger.info("Feedback salvo no Table Storage: id={}", feedback.getId());
+            logger.info("Feedback salvo no Table Storage: id={}, partitionKey={}, rowKey={}", 
+                feedback.getId(), entity.getPartitionKey(), entity.getRowKey());
 
+        } catch (com.azure.data.tables.models.TableTransactionFailedException e) {
+            logger.error("Erro de transação ao salvar feedback no Table Storage: {}", e.getMessage(), e);
+            throw new FeedbackPersistenceException("Falha ao salvar feedback no Table Storage (erro de transação)", e);
+        } catch (com.azure.core.exception.HttpResponseException e) {
+            logger.error("Erro HTTP ao salvar feedback no Table Storage. Status: {}, Mensagem: {}", 
+                e.getResponse() != null ? e.getResponse().getStatusCode() : "N/A", e.getMessage(), e);
+            throw new FeedbackPersistenceException(
+                String.format("Falha ao salvar feedback no Table Storage (erro HTTP): %s", e.getMessage()), e);
         } catch (Exception e) {
-            logger.error("Erro ao salvar feedback no Table Storage: {}", e.getMessage(), e);
+            logger.error("Erro ao salvar feedback no Table Storage. Tipo: {}, Mensagem: {}", 
+                e.getClass().getName(), e.getMessage(), e);
+            logger.error("Stack trace completo:", e);
             throw new FeedbackPersistenceException("Falha ao salvar feedback no Table Storage", e);
         }
     }
@@ -156,9 +219,14 @@ public class TableStorageFeedbackGatewayImpl implements FeedbackGateway {
 
     private void validateTableClient() {
         if (tableClient == null) {
+            logger.error("ERRO CRÍTICO: TableClient é null. Verifique se o método init() foi chamado corretamente.");
+            logger.error("  - Table Name esperado: {}", tableName);
+            logger.error("  - Connection String configurada: {}", 
+                storageConnectionString != null && !storageConnectionString.isBlank());
             throw new FeedbackPersistenceException(
-                "Table Storage client não foi inicializado. Verifique a conexão.");
+                "Table Storage client não foi inicializado. Verifique a conexão e se o método init() foi chamado.");
         }
+        logger.debug("TableClient validado com sucesso");
     }
 }
 
