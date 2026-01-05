@@ -139,46 +139,80 @@ public class TableStorageFeedbackGatewayImpl implements FeedbackGateway {
     public void save(Feedback feedback) {
         validateTableClient();
         
-        try {
-            logger.info("Iniciando salvamento de feedback no Table Storage...");
-            logger.info("  - Table Client inicializado: {}", tableClient != null);
-            logger.info("  - Table Name: {}", tableName);
-            
-            if (feedback.getId() == null) {
-                feedback.setId(UUID.randomUUID().toString());
-                logger.debug("ID gerado para feedback: {}", feedback.getId());
+        int maxRetries = 3;
+        int retryDelayMs = 500;
+        
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                if (attempt > 1) {
+                    logger.info("Tentativa {}/{} de salvamento...", attempt, maxRetries);
+                    Thread.sleep(retryDelayMs);
+                    retryDelayMs *= 2; // Exponential backoff
+                } else {
+                    logger.info("Iniciando salvamento de feedback no Table Storage...");
+                }
+                
+                logger.info("  - Table Client inicializado: {}", tableClient != null);
+                logger.info("  - Table Name: {}", tableName);
+                
+                if (feedback.getId() == null) {
+                    feedback.setId(UUID.randomUUID().toString());
+                    logger.debug("ID gerado para feedback: {}", feedback.getId());
+                }
+
+                if (feedback.getCreatedAt() == null) {
+                    feedback.setCreatedAt(LocalDateTime.now());
+                    logger.debug("CreatedAt definido para feedback: {}", feedback.getCreatedAt());
+                }
+
+                TableEntity entity = TableStorageFeedbackMapper.toTableEntity(feedback);
+                logger.info("Entidade criada - PartitionKey: {}, RowKey: {}", 
+                    entity.getPartitionKey(), entity.getRowKey());
+                logger.debug("Propriedades da entidade: {}", entity.getProperties());
+                
+                logger.info("Chamando upsertEntity no Table Storage...");
+                tableClient.upsertEntity(entity);
+                logger.info("upsertEntity executado com sucesso");
+
+                logger.info("✅ Feedback salvo no Table Storage: id={}, partitionKey={}, rowKey={}", 
+                    feedback.getId(), entity.getPartitionKey(), entity.getRowKey());
+                
+                return; // Sucesso - sair do loop
+
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                logger.error("Thread interrompida durante salvamento", e);
+                throw new FeedbackPersistenceException("Salvamento interrompido", e);
+            } catch (com.azure.data.tables.models.TableTransactionFailedException e) {
+                logger.error("Erro de transação ao salvar feedback (tentativa {}/{}): {}", 
+                    attempt, maxRetries, e.getMessage(), e);
+                if (attempt == maxRetries) {
+                    throw new FeedbackPersistenceException("Falha ao salvar feedback no Table Storage (erro de transação)", e);
+                }
+                // Continuar para próxima tentativa
+            } catch (com.azure.core.exception.HttpResponseException e) {
+                int statusCode = e.getResponse() != null ? e.getResponse().getStatusCode() : 0;
+                logger.error("Erro HTTP ao salvar feedback (tentativa {}/{}). Status: {}, Mensagem: {}", 
+                    attempt, maxRetries, statusCode, e.getMessage(), e);
+                
+                // Retry apenas para erros temporários (5xx)
+                if (statusCode >= 500 && attempt < maxRetries) {
+                    logger.info("Erro temporário detectado, tentando novamente...");
+                    // Continuar para próxima tentativa
+                } else {
+                    throw new FeedbackPersistenceException(
+                        String.format("Falha ao salvar feedback no Table Storage (erro HTTP %d): %s", 
+                            statusCode, e.getMessage()), e);
+                }
+            } catch (Exception e) {
+                logger.error("Erro ao salvar feedback (tentativa {}/{}). Tipo: {}, Mensagem: {}", 
+                    attempt, maxRetries, e.getClass().getName(), e.getMessage(), e);
+                if (attempt == maxRetries) {
+                    logger.error("Stack trace completo:", e);
+                    throw new FeedbackPersistenceException("Falha ao salvar feedback no Table Storage", e);
+                }
+                // Continuar para próxima tentativa
             }
-
-            if (feedback.getCreatedAt() == null) {
-                feedback.setCreatedAt(LocalDateTime.now());
-                logger.debug("CreatedAt definido para feedback: {}", feedback.getCreatedAt());
-            }
-
-            TableEntity entity = TableStorageFeedbackMapper.toTableEntity(feedback);
-            logger.info("Entidade criada - PartitionKey: {}, RowKey: {}", 
-                entity.getPartitionKey(), entity.getRowKey());
-            logger.debug("Propriedades da entidade: {}", entity.getProperties());
-            
-            logger.info("Chamando upsertEntity no Table Storage...");
-            tableClient.upsertEntity(entity);
-            logger.info("upsertEntity executado com sucesso");
-
-            logger.info("Feedback salvo no Table Storage: id={}, partitionKey={}, rowKey={}", 
-                feedback.getId(), entity.getPartitionKey(), entity.getRowKey());
-
-        } catch (com.azure.data.tables.models.TableTransactionFailedException e) {
-            logger.error("Erro de transação ao salvar feedback no Table Storage: {}", e.getMessage(), e);
-            throw new FeedbackPersistenceException("Falha ao salvar feedback no Table Storage (erro de transação)", e);
-        } catch (com.azure.core.exception.HttpResponseException e) {
-            logger.error("Erro HTTP ao salvar feedback no Table Storage. Status: {}, Mensagem: {}", 
-                e.getResponse() != null ? e.getResponse().getStatusCode() : "N/A", e.getMessage(), e);
-            throw new FeedbackPersistenceException(
-                String.format("Falha ao salvar feedback no Table Storage (erro HTTP): %s", e.getMessage()), e);
-        } catch (Exception e) {
-            logger.error("Erro ao salvar feedback no Table Storage. Tipo: {}, Mensagem: {}", 
-                e.getClass().getName(), e.getMessage(), e);
-            logger.error("Stack trace completo:", e);
-            throw new FeedbackPersistenceException("Falha ao salvar feedback no Table Storage", e);
         }
     }
 

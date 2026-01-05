@@ -131,4 +131,37 @@ class UrgencyTest {
         Urgency urgency = new Urgency(null);
         assertEquals("LOW", urgency.getValue());
     }
+
+    @Test
+    @DisplayName("Deve criar Urgency LOW usando construtor com valor vazio")
+    void deveCriarUrgencyLowUsandoConstrutorComValorVazio() {
+        Urgency urgency1 = new Urgency("");
+        Urgency urgency2 = new Urgency("   ");
+        
+        assertEquals("LOW", urgency1.getValue());
+        assertEquals("LOW", urgency2.getValue());
+    }
+
+    @Test
+    @DisplayName("Deve lançar exceção usando construtor com valor inválido")
+    void deveLancarExcecaoUsandoConstrutorComValorInvalido() {
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> new Urgency("INVALID")
+        );
+        
+        assertTrue(exception.getMessage().contains("Urgency must be LOW, MEDIUM or HIGH"));
+    }
+
+    @Test
+    @DisplayName("Deve criar Urgency usando construtor com valor em minúsculas")
+    void deveCriarUrgencyUsandoConstrutorComValorEmMinusculas() {
+        Urgency urgency1 = new Urgency("low");
+        Urgency urgency2 = new Urgency("medium");
+        Urgency urgency3 = new Urgency("high");
+        
+        assertEquals("LOW", urgency1.getValue());
+        assertEquals("MEDIUM", urgency2.getValue());
+        assertEquals("HIGH", urgency3.getValue());
+    }
 }

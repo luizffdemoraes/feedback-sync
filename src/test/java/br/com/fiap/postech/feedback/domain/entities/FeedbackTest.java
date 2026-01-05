@@ -121,4 +121,50 @@ class FeedbackTest {
         assertTrue(feedback.getCreatedAt().isAfter(antes) || feedback.getCreatedAt().isEqual(antes));
         assertTrue(feedback.getCreatedAt().isBefore(depois) || feedback.getCreatedAt().isEqual(depois));
     }
+
+    @Test
+    @DisplayName("Deve criar Feedback usando construtor JSON com todos os campos")
+    void deveCriarFeedbackUsandoConstrutorJsonComTodosOsCampos() {
+        String id = "test-id-123";
+        String description = "Aula excelente";
+        Score score = new Score(9);
+        Urgency urgency = Urgency.of("HIGH");
+        LocalDateTime createdAt = LocalDateTime.now().minusDays(1);
+        
+        Feedback feedback = new Feedback(id, description, score, urgency, createdAt);
+        
+        assertEquals(id, feedback.getId());
+        assertEquals(description, feedback.getDescription());
+        assertEquals(score, feedback.getScore());
+        assertEquals(urgency, feedback.getUrgency());
+        assertEquals(createdAt, feedback.getCreatedAt());
+    }
+
+    @Test
+    @DisplayName("Deve criar Feedback usando construtor JSON com campos nulos")
+    void deveCriarFeedbackUsandoConstrutorJsonComCamposNulos() {
+        String id = "test-id-123";
+        LocalDateTime createdAt = LocalDateTime.now();
+        
+        Feedback feedback = new Feedback(id, null, null, null, createdAt);
+        
+        assertEquals(id, feedback.getId());
+        assertNull(feedback.getDescription());
+        assertNull(feedback.getScore());
+        assertNull(feedback.getUrgency());
+        assertEquals(createdAt, feedback.getCreatedAt());
+    }
+
+    @Test
+    @DisplayName("Deve criar Feedback usando construtor padrão")
+    void deveCriarFeedbackUsandoConstrutorPadrao() {
+        Feedback feedback = new Feedback();
+        
+        assertNotNull(feedback);
+        assertNull(feedback.getId());
+        assertNull(feedback.getDescription());
+        assertNull(feedback.getScore());
+        assertNull(feedback.getUrgency());
+        assertNull(feedback.getCreatedAt());
+    }
 }

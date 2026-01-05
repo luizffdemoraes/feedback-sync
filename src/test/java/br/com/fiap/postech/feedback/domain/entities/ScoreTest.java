@@ -81,4 +81,28 @@ class ScoreTest {
         Score score = new Score(7);
         assertEquals("7", score.toString());
     }
+
+    @Test
+    @DisplayName("Deve retornar hashCode diferente para Scores diferentes")
+    void deveRetornarHashCodeDiferenteParaScoresDiferentes() {
+        Score score1 = new Score(5);
+        Score score2 = new Score(7);
+
+        assertNotEquals(score1.hashCode(), score2.hashCode());
+    }
+
+    @Test
+    @DisplayName("Deve retornar false quando comparado com null")
+    void deveRetornarFalseQuandoComparadoComNull() {
+        Score score = new Score(5);
+        assertNotEquals(null, score);
+    }
+
+    @Test
+    @DisplayName("Deve retornar false quando comparado com objeto de tipo diferente")
+    void deveRetornarFalseQuandoComparadoComObjetoDeTipoDiferente() {
+        Score score = new Score(5);
+        assertNotEquals("5", score);
+        assertNotEquals(5, score);
+    }
 }
