@@ -66,7 +66,7 @@ O sistema foi desenvolvido seguindo os princípios de **Clean Architecture** e *
 
 ## ⚡ Azure Functions Serverless
 
-O sistema implementa **duas funções serverless** seguindo o princípio de **Responsabilidade Única**:
+O sistema implementa **três funções serverless** seguindo o princípio de **Responsabilidade Única**:
 
 ### 📝 FeedbackHttpFunction
 
@@ -93,6 +93,21 @@ O sistema implementa **duas funções serverless** seguindo o princípio de **Re
 - ✅ Feedback crítico (nota ≤ 3) → Email enviado automaticamente
 - ✅ Dados do email: Descrição, Urgência, Data de Envio
 - ✅ Envio síncrono (dentro da mesma requisição HTTP)
+
+### ❤️ HealthHttpFunction
+
+**Tipo**: HTTP Trigger  
+**Responsabilidade**: Verificar status de saúde da aplicação
+
+**Fluxo:**
+1. Recebe requisição HTTP GET `/api/health`
+2. Retorna status da aplicação (UP/DOWN)
+3. Informações retornadas: status, service, version
+
+**Configuração:**
+- **Endpoint**: `GET /api/health`
+- **Auth Level**: ANONYMOUS
+- **Resposta**: JSON com status da aplicação
 
 ### 📈 WeeklyReportFunction
 
@@ -475,6 +490,7 @@ graph LR
         
         subgraph "Azure Functions"
             FF[FeedbackHttp<br/>Function]
+            HF[HealthHttp<br/>Function]
             WF[WeeklyReport<br/>Function]
         end
         
@@ -487,6 +503,7 @@ graph LR
     end
 
     HTTP --> FF
+    HTTP --> HF
     FF --> UC1
     UC1 --> FB
     UC2 --> FB
@@ -501,6 +518,7 @@ graph LR
     BS --> ABS
     WF --> UC2
     FF -.-> AI
+    HF -.-> AI
     WF -.-> AI
 
     style FF fill:#4695EB,color:#fff
@@ -836,52 +854,26 @@ Consulte o guia completo: **[GUIA_DEPLOY_AZURE.md](./GUIA_DEPLOY_AZURE.md)**
 
 ## 🔍 Verificar Dados no Azure
 
-Após fazer deploy e executar a aplicação, você pode verificar os relatórios gerados e os dados salvos na tabela usando o script de verificação:
+Após fazer deploy e executar a aplicação, você pode verificar os relatórios gerados no Blob Storage usando o script de verificação:
 
-### Verificação Básica
+### Verificação de Relatórios
 
 ```powershell
-.\scripts\verificar-dados-azure.ps1
+.\scripts\verificar-blob-storage.ps1
 ```
 
 Este comando mostra:
 - ✅ Lista de relatórios semanais disponíveis no Blob Storage
-- ✅ Estatísticas dos feedbacks salvos na tabela
-- ✅ Distribuição por score e urgência
-- ✅ Média de avaliações
-
-### Verificação Detalhada
-
-Para ver o conteúdo completo do relatório mais recente:
-
-```powershell
-.\scripts\verificar-dados-azure.ps1 -ShowReportContent
-```
-
-Para ver os dados completos da tabela:
-
-```powershell
-.\scripts\verificar-dados-azure.ps1 -ShowTableData
-```
-
-Para ver tudo:
-
-```powershell
-.\scripts\verificar-dados-azure.ps1 -ShowReportContent -ShowTableData
-```
+- ✅ Informações sobre os arquivos JSON gerados
+- ✅ URLs de acesso aos relatórios
 
 ### Parâmetros Disponíveis
 
 | Parâmetro | Descrição | Padrão |
 |-----------|-----------|--------|
-| `-FunctionAppName` | Nome da Function App | `feedback-function-prod` |
 | `-ResourceGroup` | Nome do Resource Group | `feedback-rg` |
 | `-StorageAccountName` | Nome do Storage Account | Detectado automaticamente |
-| `-TableName` | Nome da tabela | `feedbacks` |
 | `-ContainerName` | Nome do container | `weekly-reports` |
-| `-ShowReportContent` | Mostrar conteúdo do relatório | `false` |
-| `-ShowTableData` | Mostrar dados da tabela | `false` |
-| `-MaxTableRows` | Limite de linhas a mostrar | `50` |
 
 ### Visualização Alternativa
 
@@ -903,7 +895,7 @@ Se o Azure CLI não conseguir consultar as entidades da tabela diretamente, voc�
 
 * **Application Insights**: Logs, métricas e rastreamento de requisições
 * **Azure Monitor**: Alertas para erros e performance
-* **Health Checks**: Endpoint `/health` para verificação de saúde
+* **Health Checks**: Endpoint `/api/health` para verificação de saúde
 
 ### Segurança
 
@@ -1002,7 +994,7 @@ O projeto inclui uma collection completa do Postman para facilitar os testes da 
 
 | Pasta | Endpoint | Método | Descrição |
 |-------|----------|--------|-----------|
-| **Health Check** | `/health` | `GET` | Health check da aplicação |
+| **Health Check** | `/api/health` | `GET` | Health check da aplicação |
 | **Feedback** | `/avaliacao` | `POST` | Criar feedback de avaliação (7 exemplos) |
 
 ### 🧪 Testes Automatizados
@@ -1062,7 +1054,7 @@ Content-Type: application/json
 | Requisito | Status | Implementação |
 |-----------|--------|---------------|
 | **Ambiente Cloud** | ✅ | Azure Functions (Consumption Plan) |
-| **Serverless** | ✅ | 2 Azure Functions (FeedbackHttpFunction, WeeklyReportFunction) |
+| **Serverless** | ✅ | 3 Azure Functions (FeedbackHttpFunction, HealthHttpFunction, WeeklyReportFunction) |
 | **Responsabilidade Única** | ✅ | Cada função tem responsabilidade específica |
 | **Deploy Automatizado** | ✅ | Script PowerShell + Azure Functions Maven Plugin |
 | **Monitoramento** | ✅ | Application Insights + Azure Monitor |

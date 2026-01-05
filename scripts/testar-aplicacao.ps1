@@ -75,8 +75,8 @@ function Test-Prerequisites {
     # Verificar se aplicação está rodando
     Write-Info "`nVerificando se aplicacao esta respondendo..."
     try {
-        # Usa o endpoint de health check do Quarkus
-        $healthCheckUrl = "$baseUrl/health"
+        # Usa o endpoint de health check do Azure Functions
+        $healthCheckUrl = "$baseUrl/api/health"
         $response = Invoke-WebRequest -Uri $healthCheckUrl -Method GET -TimeoutSec 10 -ErrorAction Stop
         Write-Success "  [OK] Aplicacao esta respondendo na porta 7071 (Health Check: $($response.StatusCode))"
     } catch {

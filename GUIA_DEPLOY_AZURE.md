@@ -743,7 +743,7 @@ Invoke-RestMethod -Uri "$functionUrl/api/avaliacao" `
     -ContentType "application/json"
 
 # Testar health check
-Invoke-RestMethod -Uri "$functionUrl/health" -Method Get
+Invoke-RestMethod -Uri "$functionUrl/api/health" -Method Get
 ```
 
 ### 4. Verificar Logs
@@ -871,7 +871,7 @@ az webapp log tail `
 - [ ] Deploy realizado
 - [ ] Function App está rodando
 - [ ] Endpoint `/api/avaliacao` responde
-- [ ] Health check `/health` responde
+- [ ] Health check `/api/health` responde
 - [ ] Logs estão sendo gerados
 
 **Legenda:**
