@@ -1,27 +1,41 @@
 package br.com.fiap.postech.feedback.infrastructure.gateways;
 
-import br.com.fiap.postech.feedback.domain.exceptions.FeedbackPersistenceException;
+import java.io.ByteArrayInputStream;
+import java.lang.reflect.Field;
+import java.util.HashMap;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import org.mockito.Mock;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import org.mockito.junit.jupiter.MockitoExtension;
+
 import com.azure.storage.blob.BlobClient;
 import com.azure.storage.blob.BlobContainerClient;
 import com.azure.storage.blob.BlobServiceClient;
 import com.azure.storage.blob.models.BlobHttpHeaders;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.io.ByteArrayInputStream;
-import java.lang.reflect.Field;
-import java.util.HashMap;
-import java.util.Map;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import br.com.fiap.postech.feedback.domain.exceptions.FeedbackPersistenceException;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("Testes para BlobReportStorageGatewayImpl")
@@ -255,7 +269,7 @@ class BlobReportStorageGatewayImplTest {
 
     @Test
     @DisplayName("Deve retornar URL correta mesmo quando containerClient não está inicializado")
-    void deveRetornarUrlCorretaMesmoQuandoContainerClientNaoEstaInicializado() throws Exception {
+    void deveRetornarUrlCorretaMesmoQuandoContainerClientNaoEstaInicializado() {
         // Este teste verifica que getReportUrl funciona mesmo sem init()
         // Na prática, init() sempre é chamado pelo CDI, mas testamos o comportamento direto
         String fileName = "relatorio.json";

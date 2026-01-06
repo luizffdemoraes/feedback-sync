@@ -1,30 +1,42 @@
 package br.com.fiap.postech.feedback.infrastructure.gateways;
 
-import br.com.fiap.postech.feedback.domain.entities.Feedback;
-import br.com.fiap.postech.feedback.domain.exceptions.FeedbackPersistenceException;
-import com.azure.core.exception.ResourceNotFoundException;
-import com.azure.core.http.rest.PagedIterable;
-import com.azure.data.tables.TableClient;
-import com.azure.data.tables.models.TableEntity;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.junit.jupiter.MockitoSettings;
-import org.mockito.quality.Strictness;
-
 import java.lang.reflect.Field;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.anyString;
+import org.mockito.Mock;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+
+import com.azure.core.exception.ResourceNotFoundException;
+import com.azure.core.http.rest.PagedIterable;
+import com.azure.data.tables.TableClient;
+import com.azure.data.tables.models.TableEntity;
+
+import br.com.fiap.postech.feedback.domain.entities.Feedback;
+import br.com.fiap.postech.feedback.domain.exceptions.FeedbackPersistenceException;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -58,7 +70,7 @@ class TableStorageFeedbackGatewayImplTest {
         // Mockar verificação de persistência (getEntity)
         TableEntity mockEntity = new TableEntity("feedback", "feedback-id-123");
         mockEntity.addProperty("id", "feedback-id-123");
-        when(tableClient.getEntity(eq("feedback"), eq("feedback-id-123"))).thenReturn(mockEntity);
+        when(tableClient.getEntity("feedback", "feedback-id-123")).thenReturn(mockEntity);
 
         assertDoesNotThrow(() -> gateway.save(feedback));
 
@@ -505,7 +517,7 @@ class TableStorageFeedbackGatewayImplTest {
         // Mas como o init() completo pode falhar em outros pontos, vamos apenas verificar que não lança exceção específica
         assertThrows(
             FeedbackPersistenceException.class,
-            () -> gatewayComErro.init()
+            gatewayComErro::init
         );
     }
 
@@ -527,7 +539,7 @@ class TableStorageFeedbackGatewayImplTest {
         // Deve tratar 409 como sucesso (não lançar exceção)
         assertThrows(
             FeedbackPersistenceException.class,
-            () -> gatewayComErro.init()
+            gatewayComErro::init
         );
     }
 
@@ -550,7 +562,7 @@ class TableStorageFeedbackGatewayImplTest {
         // Deve tratar erro na verificação como warning e continuar, mas pode lançar exceção se não conseguir criar TableClient depois
         assertThrows(
             FeedbackPersistenceException.class,
-            () -> gatewayComErro.init()
+            gatewayComErro::init
         );
     }
 
@@ -577,7 +589,7 @@ class TableStorageFeedbackGatewayImplTest {
 
         FeedbackPersistenceException exception = assertThrows(
             FeedbackPersistenceException.class,
-            () -> gatewayComErro.init()
+            gatewayComErro::init
         );
 
         // A mensagem pode ser "Falha ao conectar à tabela" ou "Falha ao conectar ao Table Storage"

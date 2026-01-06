@@ -1,22 +1,38 @@
 package br.com.fiap.postech.feedback.infrastructure.handlers;
 
-import br.com.fiap.postech.feedback.application.dtos.responses.WeeklyReportResponse;
-import br.com.fiap.postech.feedback.application.usecases.GenerateWeeklyReportUseCase;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.microsoft.azure.functions.ExecutionContext;
+import java.time.Instant;
+import java.util.logging.Logger;
+import java.util.stream.Stream;
+
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+import static org.mockito.ArgumentMatchers.anyString;
 import org.mockito.Mock;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.time.Instant;
-import java.util.logging.Logger;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.microsoft.azure.functions.ExecutionContext;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import br.com.fiap.postech.feedback.application.dtos.responses.WeeklyReportResponse;
+import br.com.fiap.postech.feedback.application.usecases.GenerateWeeklyReportUseCase;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("Testes para WeeklyReportFunction")
@@ -129,8 +145,13 @@ class WeeklyReportFunctionTest {
         ObjectMapper mapper = functionSemSpy.getObjectMapper();
         
         assertNotNull(mapper);
-        // Verificar se o módulo JavaTimeModule está registrado verificando se pode serializar LocalDateTime
-        assertTrue(mapper.canSerialize(java.time.LocalDateTime.class));
+        // Verificar se o módulo JavaTimeModule está registrado tentando serializar um LocalDateTime
+        try {
+            mapper.writeValueAsString(java.time.LocalDateTime.now());
+            // Se não lançar exceção, significa que pode serializar
+        } catch (Exception e) {
+            fail("ObjectMapper deveria poder serializar LocalDateTime");
+        }
         
         // Limpar os stubs do setUp que não são usados neste teste
         clearInvocations(function);
@@ -252,7 +273,7 @@ class WeeklyReportFunctionTest {
 
     @Test
     @DisplayName("Deve lançar RuntimeException quando reflection falha ao criar TableStorageFeedbackGatewayImpl")
-    void deveLancarRuntimeExceptionQuandoReflectionFalhaAoCriarTableStorageFeedbackGatewayImpl() throws Exception {
+    void deveLancarRuntimeExceptionQuandoReflectionFalhaAoCriarTableStorageFeedbackGatewayImpl() {
         WeeklyReportFunction functionSemSpy = new WeeklyReportFunction();
         
         // Simular erro ao tentar criar gateway via reflection
@@ -269,7 +290,7 @@ class WeeklyReportFunctionTest {
 
     @Test
     @DisplayName("Deve lançar RuntimeException quando reflection falha ao criar BlobReportStorageGatewayImpl")
-    void deveLancarRuntimeExceptionQuandoReflectionFalhaAoCriarBlobReportStorageGatewayImpl() throws Exception {
+    void deveLancarRuntimeExceptionQuandoReflectionFalhaAoCriarBlobReportStorageGatewayImpl() {
         WeeklyReportFunction functionSemSpy = new WeeklyReportFunction();
         
         // Simular erro ao tentar criar blob gateway via reflection
@@ -285,7 +306,7 @@ class WeeklyReportFunctionTest {
 
     @Test
     @DisplayName("Deve processar getGenerateWeeklyReportUseCase com diferentes variáveis de ambiente para container")
-    void deveProcessarGetGenerateWeeklyReportUseCaseComDiferentesVariaveisDeAmbienteParaContainer() throws Exception {
+    void deveProcessarGetGenerateWeeklyReportUseCaseComDiferentesVariaveisDeAmbienteParaContainer() {
         WeeklyReportFunction functionSemSpy = new WeeklyReportFunction();
         
         // Testar com container name configurado
@@ -312,7 +333,7 @@ class WeeklyReportFunctionTest {
 
     @Test
     @DisplayName("Deve processar getGenerateWeeklyReportUseCase quando reflection falha ao setar campo")
-    void deveProcessarGetGenerateWeeklyReportUseCaseQuandoReflectionFalhaAoSetarCampo() throws Exception {
+    void deveProcessarGetGenerateWeeklyReportUseCaseQuandoReflectionFalhaAoSetarCampo() {
         WeeklyReportFunction functionSemSpy = new WeeklyReportFunction();
         
         // Tentar criar use case com configurações inválidas
@@ -327,12 +348,12 @@ class WeeklyReportFunctionTest {
         }
     }
 
-    @Test
-    @DisplayName("Deve processar getGenerateWeeklyReportUseCase com AzureWebJobsStorage")
-    void deveProcessarGetGenerateWeeklyReportUseCaseComAzureWebJobsStorage() throws Exception {
+    @ParameterizedTest
+    @MethodSource("configuracoesAmbienteProvider")
+    @DisplayName("Deve processar getGenerateWeeklyReportUseCase com diferentes configurações")
+    void deveProcessarGetGenerateWeeklyReportUseCaseComDiferentesConfiguracoes(String displayName) {
         WeeklyReportFunction functionSemSpy = new WeeklyReportFunction();
         
-        // O método deve funcionar com AzureWebJobsStorage como fallback
         assertDoesNotThrow(() -> {
             try {
                 functionSemSpy.getGenerateWeeklyReportUseCase();
@@ -346,69 +367,21 @@ class WeeklyReportFunctionTest {
         });
     }
 
-    @Test
-    @DisplayName("Deve processar getGenerateWeeklyReportUseCase com AZURE_STORAGE_CONNECTION_STRING")
-    void deveProcessarGetGenerateWeeklyReportUseCaseComAzureStorageConnectionString() throws Exception {
-        WeeklyReportFunction functionSemSpy = new WeeklyReportFunction();
-        
-        // O método deve funcionar com AZURE_STORAGE_CONNECTION_STRING
-        assertDoesNotThrow(() -> {
-            try {
-                functionSemSpy.getGenerateWeeklyReportUseCase();
-            } catch (RuntimeException e) {
-                // Esperado se não tiver Azurite ou configurações inválidas
-                assertTrue(e.getMessage().contains("Falha ao criar GenerateWeeklyReportUseCase") ||
-                           e.getMessage().contains("Connection") ||
-                           e.getMessage().contains("Table Storage") ||
-                           e.getMessage().contains("Blob Storage"));
-            }
-        });
+    static Stream<Arguments> configuracoesAmbienteProvider() {
+        return Stream.of(
+            Arguments.of("com AzureWebJobsStorage"),
+            Arguments.of("com AZURE_STORAGE_CONNECTION_STRING"),
+            Arguments.of("com table name customizado"),
+            Arguments.of("com container name padrão")
+        );
     }
 
-    @Test
-    @DisplayName("Deve processar getGenerateWeeklyReportUseCase com table name customizado")
-    void deveProcessarGetGenerateWeeklyReportUseCaseComTableNameCustomizado() throws Exception {
+    @ParameterizedTest
+    @MethodSource("reflectionFalhaProvider")
+    @DisplayName("Deve processar getGenerateWeeklyReportUseCase quando reflection falha")
+    void deveProcessarGetGenerateWeeklyReportUseCaseQuandoReflectionFalha(String displayName) {
         WeeklyReportFunction functionSemSpy = new WeeklyReportFunction();
         
-        // O método deve funcionar com table name customizado
-        assertDoesNotThrow(() -> {
-            try {
-                functionSemSpy.getGenerateWeeklyReportUseCase();
-            } catch (RuntimeException e) {
-                // Esperado se não tiver Azurite ou configurações inválidas
-                assertTrue(e.getMessage().contains("Falha ao criar GenerateWeeklyReportUseCase") ||
-                           e.getMessage().contains("Connection") ||
-                           e.getMessage().contains("Table Storage") ||
-                           e.getMessage().contains("Blob Storage"));
-            }
-        });
-    }
-
-    @Test
-    @DisplayName("Deve processar getGenerateWeeklyReportUseCase com container name padrão")
-    void deveProcessarGetGenerateWeeklyReportUseCaseComContainerNamePadrao() throws Exception {
-        WeeklyReportFunction functionSemSpy = new WeeklyReportFunction();
-        
-        // O método deve usar "weekly-reports" como padrão quando container name não está configurado
-        assertDoesNotThrow(() -> {
-            try {
-                functionSemSpy.getGenerateWeeklyReportUseCase();
-            } catch (RuntimeException e) {
-                // Esperado se não tiver Azurite ou configurações inválidas
-                assertTrue(e.getMessage().contains("Falha ao criar GenerateWeeklyReportUseCase") ||
-                           e.getMessage().contains("Connection") ||
-                           e.getMessage().contains("Table Storage") ||
-                           e.getMessage().contains("Blob Storage"));
-            }
-        });
-    }
-
-    @Test
-    @DisplayName("Deve processar getGenerateWeeklyReportUseCase quando reflection falha ao invocar init")
-    void deveProcessarGetGenerateWeeklyReportUseCaseQuandoReflectionFalhaAoInvocarInit() throws Exception {
-        WeeklyReportFunction functionSemSpy = new WeeklyReportFunction();
-        
-        // Tentar criar use case - reflection pode falhar ao invocar init
         assertDoesNotThrow(() -> {
             try {
                 functionSemSpy.getGenerateWeeklyReportUseCase();
@@ -421,22 +394,11 @@ class WeeklyReportFunctionTest {
         });
     }
 
-    @Test
-    @DisplayName("Deve processar getGenerateWeeklyReportUseCase quando reflection falha ao obter campo")
-    void deveProcessarGetGenerateWeeklyReportUseCaseQuandoReflectionFalhaAoObterCampo() throws Exception {
-        WeeklyReportFunction functionSemSpy = new WeeklyReportFunction();
-        
-        // Tentar criar use case - reflection pode falhar ao obter campo
-        assertDoesNotThrow(() -> {
-            try {
-                functionSemSpy.getGenerateWeeklyReportUseCase();
-            } catch (RuntimeException e) {
-                // Esperado se não tiver Azurite ou configurações inválidas
-                assertTrue(e.getMessage().contains("Falha ao criar GenerateWeeklyReportUseCase") ||
-                           e.getMessage().contains("Table Storage") ||
-                           e.getMessage().contains("Blob Storage"));
-            }
-        });
+    static Stream<Arguments> reflectionFalhaProvider() {
+        return Stream.of(
+            Arguments.of("ao invocar init"),
+            Arguments.of("ao obter campo")
+        );
     }
 
     @Test
@@ -522,15 +484,20 @@ class WeeklyReportFunctionTest {
         ObjectMapper mapper = functionSemSpy.getObjectMapper();
         
         assertNotNull(mapper);
-        // Verificar se pode serializar tipos de data
-        assertTrue(mapper.canSerialize(java.time.LocalDateTime.class));
-        assertTrue(mapper.canSerialize(java.time.Instant.class));
-        assertTrue(mapper.canSerialize(java.time.LocalDate.class));
+        // Verificar se pode serializar tipos de data tentando serializar objetos de teste
+        try {
+            mapper.writeValueAsString(java.time.LocalDateTime.now());
+            mapper.writeValueAsString(java.time.Instant.now());
+            mapper.writeValueAsString(java.time.LocalDate.now());
+            // Se não lançar exceção, significa que pode serializar
+        } catch (Exception e) {
+            fail("ObjectMapper deveria poder serializar tipos de data");
+        }
     }
 
     @Test
     @DisplayName("Deve criar ObjectMapper com WRITE_DATES_AS_TIMESTAMPS desabilitado")
-    void deveCriarObjectMapperComWriteDatesAsTimestampsDesabilitado() throws Exception {
+    void deveCriarObjectMapperComWriteDatesAsTimestampsDesabilitado() {
         WeeklyReportFunction functionSemSpy = new WeeklyReportFunction();
         ObjectMapper mapper = functionSemSpy.getObjectMapper();
         
