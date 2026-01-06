@@ -217,16 +217,16 @@ feedback-sync/
 │       └── java/... (estrutura espelhada)
 ├── scripts/
 │   ├── criar-recursos-azure.ps1          # Cria recursos no Azure
-│   ├── configurar-storage-connection.ps1 # Configura storage connection
-│   ├── verificar-variaveis-cloud.ps1    # Verifica variáveis na cloud
+│   ├── configurar-cloud.ps1              # ⭐ Script ÚNICO: Configura tudo na cloud
+│   ├── verificar-variaveis-cloud.ps1     # Verifica variáveis na cloud
 │   ├── implantar-azure.ps1               # Faz deploy da aplicação
-│   ├── deletar-function-app.ps1         # Deleta apenas Function App
+│   ├── deletar-function-app.ps1          # Deleta apenas Function App
 │   ├── deletar-recursos-azure.ps1        # Deleta todos os recursos
 │   ├── executar-aplicacao.ps1            # Executa aplicação localmente
 │   ├── executar-azure-functions-local.ps1 # Executa Azure Functions localmente
-│   ├── testar-aplicacao.ps1             # Testa aplicação completa
+│   ├── testar-aplicacao.ps1              # Testa aplicação completa
 │   ├── verificar-variaveis-ambiente.ps1  # Verifica variáveis locais
-│   └── verificar-dados-azure.ps1        # Verifica relatórios e dados no Azure
+│   └── verificar-blob-storage.ps1        # Verifica relatórios e dados no Azure
 ├── collection/                          # Postman Collections
 ├── docker-compose.yml                   # Emuladores Azure locais
 ├── pom.xml
@@ -774,10 +774,24 @@ Siga estes passos **na ordem** para fazer deploy completo:
    .\scripts\criar-recursos-azure.ps1 -MailtrapApiToken "token" -MailtrapInboxId "id" -AdminEmail "email@exemplo.com"
    ```
 
-2. **Configurar Storage Connection String:**
+2. **Configurar Variáveis de Ambiente na Cloud:**
+   
+   **Primeiro, configure as variáveis de ambiente localmente:**
    ```powershell
-   .\scripts\configurar-storage-connection.ps1
+   $env:MAILTRAP_API_TOKEN = "seu-token"
+   $env:ADMIN_EMAIL = "seu-email@exemplo.com"
+   $env:MAILTRAP_INBOX_ID = "seu-inbox-id"
    ```
+   
+   **Depois, execute o script único de configuração:**
+   ```powershell
+   .\scripts\configurar-cloud.ps1
+   ```
+   
+   Este script único configura:
+   - ✅ Storage Connection String (`AZURE_STORAGE_CONNECTION_STRING` e `AzureWebJobsStorage`)
+   - ✅ Todas as variáveis de ambiente do sistema na cloud
+   - ✅ Mailtrap (se configurado localmente)
 
 3. **Verificar Variáveis de Ambiente:**
    ```powershell
@@ -823,12 +837,25 @@ Siga estes passos **na ordem** para fazer deploy completo:
    - Configura variáveis de ambiente básicas
    - Opcional: Configura Mailtrap se parâmetros fornecidos
 
-2. **Configurar Storage Connection String:**
+2. **Configurar Variáveis de Ambiente na Cloud (Script Único):**
+   
+   **Configure as variáveis de ambiente localmente primeiro:**
    ```powershell
-   .\scripts\configurar-storage-connection.ps1
+   $env:MAILTRAP_API_TOKEN = "seu-token"
+   $env:ADMIN_EMAIL = "seu-email@exemplo.com"
+   $env:MAILTRAP_INBOX_ID = "seu-inbox-id"
    ```
-   - Verifica e configura `AZURE_STORAGE_CONNECTION_STRING`
-   - Usa `AzureWebJobsStorage` como fallback se disponível
+   
+   **Execute o script único de configuração:**
+   ```powershell
+   .\scripts\configurar-cloud.ps1
+   ```
+   
+   Este script único faz tudo:
+   - ✅ Configura Storage Connection String (`AZURE_STORAGE_CONNECTION_STRING` e `AzureWebJobsStorage`)
+   - ✅ Sincroniza todas as variáveis de ambiente do sistema para a cloud
+   - ✅ Configura Mailtrap (se configurado localmente)
+   - ✅ Descoberta automática de recursos (Resource Group, Function App, Storage Account)
 
 3. **Verificar Configurações:**
    ```powershell

@@ -49,36 +49,47 @@ Execute o script para criar todos os recursos necessários (Resource Group, Stor
 
 ---
 
-### **Passo 2: Configurar Storage Connection String**
+### **Passo 2: Configurar Variáveis de Ambiente na Cloud (Script Único)**
 
-Se `AZURE_STORAGE_CONNECTION_STRING` não foi configurada automaticamente, execute:
+Este é o **script único** que configura tudo na cloud de uma vez. Ele sincroniza as variáveis de ambiente do sistema com a Function App do Azure.
+
+**Primeiro, configure as variáveis de ambiente localmente:**
 
 ```powershell
-.\scripts\configurar-storage-connection.ps1
+# Configure as variáveis de ambiente do sistema
+$env:MAILTRAP_API_TOKEN = "seu-token"
+$env:ADMIN_EMAIL = "seu-email@exemplo.com"
+$env:MAILTRAP_INBOX_ID = "seu-inbox-id"
+
+# Opcional: outras variáveis
+$env:AZURE_TABLE_NAME = "feedbacks"
+$env:AZURE_STORAGE_CONTAINER_NAME = "weekly-reports"
+$env:REPORT_SCHEDULE_CRON = "0 */5 * * * *"
 ```
 
-**O que este script faz:**
-- ✅ Verifica se `AZURE_STORAGE_CONNECTION_STRING` está configurada
-- ✅ Se não estiver, usa `AzureWebJobsStorage` como fallback
-- ✅ Se não encontrar, obtém connection string do Storage Account
-- ✅ Configura ambas as variáveis na Function App
-
-**⏱️ Tempo estimado:** 30 segundos
-
----
-
-### **Passo 3: Configurar Mailtrap (se não foi feito no Passo 1)**
-
-Se você não forneceu as credenciais do Mailtrap no Passo 1, configure agora:
+**Depois, execute o script único de configuração:**
 
 ```powershell
-az functionapp config appsettings set `
-    --name feedback-function-prod `
-    --resource-group feedback-rg `
-    --settings `
-        "MAILTRAP_API_TOKEN=seu-token" `
-        "ADMIN_EMAIL=seu-email@exemplo.com" `
-        "MAILTRAP_INBOX_ID=seu-inbox-id"
+.\scripts\configurar-cloud.ps1
+```
+
+**O que este script único faz:**
+- ✅ Configura Storage Connection String (`AZURE_STORAGE_CONNECTION_STRING` e `AzureWebJobsStorage`)
+- ✅ Sincroniza todas as variáveis de ambiente do sistema para a cloud
+- ✅ Configura Mailtrap (se configurado localmente)
+- ✅ Descoberta automática de recursos (Resource Group, Function App, Storage Account)
+- ✅ Verifica se já está configurado (use `-Force` para atualizar)
+
+**Parâmetros opcionais:**
+```powershell
+# Com parâmetros específicos
+.\scripts\configurar-cloud.ps1 `
+    -FunctionAppName "minha-function" `
+    -ResourceGroup "meu-rg" `
+    -StorageAccountName "meu-storage"
+
+# Para forçar atualização mesmo se já estiver configurado
+.\scripts\configurar-cloud.ps1 -Force
 ```
 
 **Como obter credenciais do Mailtrap:**
@@ -87,11 +98,11 @@ az functionapp config appsettings set `
 3. Vá em **Settings > API Tokens** e gere um token
 4. Vá em **Settings > Inboxes** e copie o **Inbox ID**
 
-**⏱️ Tempo estimado:** 2 minutos
+**⏱️ Tempo estimado:** 1-2 minutos
 
 ---
 
-### **Passo 4: Verificar Variáveis de Ambiente**
+### **Passo 3: Verificar Variáveis de Ambiente**
 
 Verifique se todas as variáveis estão configuradas corretamente:
 
@@ -119,7 +130,7 @@ Fluxo de Feedback:
 
 ---
 
-### **Passo 5: Fazer Deploy da Aplicação**
+### **Passo 4: Fazer Deploy da Aplicação**
 
 Compile e faça deploy da aplicação para a Function App:
 
@@ -136,7 +147,7 @@ Compile e faça deploy da aplicação para a Function App:
 
 ---
 
-### **Passo 6: Testar a Aplicação**
+### **Passo 5: Testar a Aplicação**
 
 Teste o endpoint de avaliação:
 
@@ -232,9 +243,13 @@ Após seguir todos os passos, verifique:
 ```
 1. .\scripts\criar-recursos-azure.ps1
    ↓
-2. .\scripts\configurar-storage-connection.ps1
+2. Configurar variáveis de ambiente localmente:
+   $env:MAILTRAP_API_TOKEN = "seu-token"
+   $env:ADMIN_EMAIL = "seu-email@exemplo.com"
+   $env:MAILTRAP_INBOX_ID = "seu-inbox-id"
    ↓
-3. Configurar Mailtrap (se não foi feito no passo 1)
+3. .\scripts\configurar-cloud.ps1  ⭐ Script ÚNICO que configura tudo
+   (Storage Connection String + Variáveis de Ambiente)
    ↓
 4. .\scripts\verificar-variaveis-cloud.ps1
    ↓
@@ -517,20 +532,28 @@ O script configura automaticamente:
 
 ## 🔧 Configuração da Aplicação
 
-### 1. Configurar Storage Connection String (Automático)
+### 1. Configurar Variáveis de Ambiente na Cloud (Script Único)
 
-**Recomendado:** Use o script automatizado que descobre tudo automaticamente:
+**Recomendado:** Use o script único que configura tudo de uma vez:
 
+**Primeiro, configure as variáveis de ambiente localmente:**
 ```powershell
-.\scripts\configurar-storage-connection.ps1
+$env:MAILTRAP_API_TOKEN = "seu-token"
+$env:ADMIN_EMAIL = "seu-email@exemplo.com"
+$env:MAILTRAP_INBOX_ID = "seu-inbox-id"
 ```
 
-**O que o script faz:**
-- ✅ Descobre Resource Group, Function App e Storage Account automaticamente
-- ✅ Verifica se `AZURE_STORAGE_CONNECTION_STRING` já está configurada
-- ✅ Se não estiver, usa `AzureWebJobsStorage` como fallback (mais rápido)
-- ✅ Se não encontrar, obtém connection string diretamente do Storage Account
-- ✅ Configura ambas as variáveis na Function App
+**Depois, execute o script único:**
+```powershell
+.\scripts\configurar-cloud.ps1
+```
+
+**O que o script único faz:**
+- ✅ Configura Storage Connection String (`AZURE_STORAGE_CONNECTION_STRING` e `AzureWebJobsStorage`)
+- ✅ Sincroniza todas as variáveis de ambiente do sistema para a cloud
+- ✅ Configura Mailtrap (se configurado localmente)
+- ✅ Descoberta automática de recursos (Resource Group, Function App, Storage Account)
+- ✅ Verifica se já está configurado (use `-Force` para atualizar)
 
 **Opção Manual (se necessário):**
 
