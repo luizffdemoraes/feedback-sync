@@ -6,24 +6,31 @@ Sistema de Feedback Serverless para avaliação de aulas, desenvolvido com Azure
 
 ## 📑 ÍNDICE
 
-* [Descrição do Projeto](#descrição-do-projeto)
+* [Descrição do Projeto](#descricao-do-projeto)
 * [Funcionalidades e Endpoints](#funcionalidades-e-endpoints)
 * [Azure Functions Serverless](#azure-functions-serverless)
 * [Tecnologias Utilizadas](#tecnologias-utilizadas)
 * [Estrutura do Projeto](#estrutura-do-projeto)
 * [Clean Architecture](#clean-architecture)
-* [Arquitetura da Solução](#arquitetura-da-solução)
+* [Arquitetura da Solução](#arquitetura-da-solucao)
 * [Diagramas do Sistema](#diagramas-do-sistema)
 * [Requisitos](#requisitos)
 * [Como Rodar o Projeto](#como-rodar-o-projeto)
 * [Deploy no Azure](#deploy-no-azure)
-* [Monitoramento e Segurança](#monitoramento-e-segurança)
-* [Cobertura de Código](#cobertura-de-código)
-* [Collection Postman](#-collection-postman)
-* [Documentação Adicional](#documentação-adicional)
+* [Verificar Dados no Azure](#verificar-dados-no-azure)
+* [Monitoramento e Segurança](#monitoramento-e-seguranca)
+* [Cobertura de Código](#cobertura-de-codigo)
+* [Collection Postman](#collection-postman)
+* [Documentação Adicional](#documentacao-adicional)
+* [Atendimento aos Requisitos do Tech Challenge](#atendimento-aos-requisitos-do-tech-challenge)
+* [Fluxo de Notificações](#fluxo-de-notificacoes)
+* [Regras de Validação](#regras-de-validacao)
+* [Configuração para Demonstração e Gravação de Vídeo](#configuracao-para-demonstracao-e-gravacao-de-video)
+* [Suporte](#suporte)
 
 ---
 
+<a id="descricao-do-projeto"></a>
 ## 📌 Descrição do Projeto
 
 O **Feedback Sync** é uma plataforma serverless hospedada no Azure que permite:
@@ -37,6 +44,7 @@ O sistema foi desenvolvido seguindo os princípios de **Clean Architecture** e *
 
 ---
 
+<a id="funcionalidades-e-endpoints"></a>
 ## ⚙️ Funcionalidades e Endpoints
 
 ### 📝 Feedback Service
@@ -64,6 +72,7 @@ O sistema foi desenvolvido seguindo os princípios de **Clean Architecture** e *
 
 ---
 
+<a id="azure-functions-serverless"></a>
 ## ⚡ Azure Functions Serverless
 
 O sistema implementa **três funções serverless** seguindo o princípio de **Responsabilidade Única**:
@@ -138,6 +147,7 @@ O sistema implementa **três funções serverless** seguindo o princípio de **R
 
 ---
 
+<a id="tecnologias-utilizadas"></a>
 ## 🛠️ Tecnologias Utilizadas
 
 ![Java 21](https://img.shields.io/badge/Java-21-ED8B00?style=for-the-badge&logo=java&logoColor=white)
@@ -161,6 +171,7 @@ O sistema implementa **três funções serverless** seguindo o princípio de **R
 
 ---
 
+<a id="estrutura-do-projeto"></a>
 ## 📂 Estrutura do Projeto
 
 ```
@@ -238,6 +249,7 @@ feedback-sync/
 
 ---
 
+<a id="clean-architecture"></a>
 ## 🧹 Clean Architecture
 
 O projeto segue os princípios da **Clean Architecture**, garantindo:
@@ -268,6 +280,7 @@ O projeto segue os princípios da **Clean Architecture**, garantindo:
 
 ---
 
+<a id="arquitetura-da-solucao"></a>
 ## 🏗️ Arquitetura da Solução
 
 ### Componentes Azure
@@ -284,6 +297,7 @@ O projeto segue os princípios da **Clean Architecture**, garantindo:
 
 ---
 
+<a id="diagramas-do-sistema"></a>
 ## 📊 Diagramas do Sistema
 
 O projeto possui um conjunto completo de diagramas em Mermaid que documentam a arquitetura, fluxos e componentes do sistema. Todos os diagramas são renderizados automaticamente no GitHub e em visualizadores Markdown compatíveis.
@@ -694,6 +708,7 @@ graph TB
 
 ---
 
+<a id="requisitos"></a>
 ## 📋 Requisitos
 
 ### Software Necessário
@@ -711,6 +726,7 @@ graph TB
 
 ---
 
+<a id="como-rodar-o-projeto"></a>
 ## ▶️ Como Rodar o Projeto
 
 ### 1. Clone o Repositório
@@ -759,6 +775,7 @@ docker-compose down -v
 
 ---
 
+<a id="deploy-no-azure"></a>
 ## 🚀 Deploy no Azure
 
 ### ⚡ Passo a Passo Rápido
@@ -879,6 +896,7 @@ Consulte o guia completo: **[GUIA_DEPLOY_AZURE.md](./GUIA_DEPLOY_AZURE.md)**
 
 ---
 
+<a id="verificar-dados-no-azure"></a>
 ## 🔍 Verificar Dados no Azure
 
 Após fazer deploy e executar a aplicação, você pode verificar os relatórios gerados no Blob Storage usando o script de verificação:
@@ -916,6 +934,7 @@ Se o Azure CLI não conseguir consultar as entidades da tabela diretamente, voc�
 
 ---
 
+<a id="monitoramento-e-seguranca"></a>
 ## 📊 Monitoramento e Segurança
 
 ### Monitoramento
@@ -944,6 +963,7 @@ ADMIN_EMAIL=<admin@example.com>
 
 ---
 
+<a id="cobertura-de-codigo"></a>
 ## 📈 Cobertura de Código
 
 Gerada com **JaCoCo**.
@@ -964,6 +984,7 @@ target/site/jacoco/index.html
 
 ---
 
+<a id="collection-postman"></a>
 ## 📮 Collection Postman
 
 O projeto inclui uma collection completa do Postman para facilitar os testes da API.
@@ -1066,6 +1087,7 @@ Content-Type: application/json
 
 ---
 
+<a id="documentacao-adicional"></a>
 ## 📚 Documentação Adicional
 
 * **[GUIA_EXECUCAO_LOCAL.md](./GUIA_EXECUCAO_LOCAL.md)** - Guia detalhado de execução local
@@ -1074,6 +1096,7 @@ Content-Type: application/json
 
 ---
 
+<a id="atendimento-aos-requisitos-do-tech-challenge"></a>
 ## 🎯 Atendimento aos Requisitos do Tech Challenge
 
 ### ✅ Requisitos Atendidos
@@ -1117,6 +1140,7 @@ Content-Type: application/json
 
 ---
 
+<a id="fluxo-de-notificacoes"></a>
 ## 🔄 Fluxo de Notificações
 
 | Evento | Gateway | Serviço | Ação |
@@ -1125,6 +1149,7 @@ Content-Type: application/json
 
 ---
 
+<a id="regras-de-validacao"></a>
 ## 🛡️ Regras de Validação
 
 | Validação | Descrição | Implementação |
@@ -1136,6 +1161,7 @@ Content-Type: application/json
 
 ---
 
+<a id="configuracao-para-demonstracao-e-gravacao-de-video"></a>
 ## 🎬 Configuração para Demonstração e Gravação de Vídeo
 
 Para fins didáticos e gravação de vídeo, você pode configurar o relatório para ser gerado com maior frequência:
@@ -1178,6 +1204,7 @@ az functionapp config appsettings set `
 
 ---
 
+<a id="suporte"></a>
 ## 📞 Suporte
 
 Para dúvidas ou problemas, consulte a documentação adicional ou abra uma issue no repositório.
