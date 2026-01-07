@@ -548,34 +548,33 @@ graph LR
 ```mermaid
 flowchart TD
     Start([Estudante cria feedback]) --> Input{POST /avaliacao}
-    
+
     Input --> Validate[Validar dados<br/>descrição, nota 0-10]
-    
+
     Validate -->|Inválido| Error1[400 Bad Request]
     Validate -->|Válido| Create[CreateFeedbackUseCase]
-    
+
     Create --> Save[Salvar no Table Storage]
-    Save --> Check{Feedback crítico?<br/>nota ≤ 3}
-    
+    Save --> Check{Feedback crítico?<br/>nota <= 3}
+
     Check -->|Não| Success1[201 Created<br/>ID retornado]
     Check -->|Sim| SendEmail[Enviar email<br/>via Mailtrap]
-    
+
     SendEmail --> Success1
-    
+
     SendEmail -.->|Email| Mailtrap[Mailtrap<br/>Email Service]
     Mailtrap -.->|Email| Admin[Administrador<br/>recebe email]
-    
-    Timer[Timer CRON<br/>0 */5 * * * *<br/>(A cada 5 min - configurável)] --> WeeklyFunc[WeeklyReportFunction]
+
+    Timer[Timer CRON<br/>a cada 5 minutos] --> WeeklyFunc[WeeklyReportFunction]
     WeeklyFunc --> ReportUC[GenerateWeeklyReportUseCase]
     ReportUC --> Fetch[Buscar feedbacks<br/>da semana]
     Fetch --> Calc[Calcular métricas<br/>média, total, por dia, urgência]
     Calc --> SaveReport[Salvar JSON<br/>no Blob Storage]
     SaveReport --> Return[Retornar URL<br/>do relatório]
-    
+
     style Start fill:#E3F2FD
     style Success1 fill:#C8E6C9
     style Error1 fill:#FFCDD2
-    style Email fill:#FFF9C4
     style Return fill:#C8E6C9
 ```
 
