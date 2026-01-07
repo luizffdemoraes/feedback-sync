@@ -33,6 +33,12 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
+            <!-- Azure Functions Java Library -->
+            <dependency>
+                <groupId>com.microsoft.azure.functions</groupId>
+                <artifactId>azure-functions-java-library</artifactId>
+                <version>${azure.functions.version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
@@ -47,7 +53,6 @@
         <dependency>
             <groupId>com.microsoft.azure.functions</groupId>
             <artifactId>azure-functions-java-library</artifactId>
-            <version>${azure.functions.version}</version>
         </dependency>
 
         <!-- Azure Blob Storage -->
