@@ -555,7 +555,7 @@ flowchart TD
     Validate -->|Válido| Create[CreateFeedbackUseCase]
 
     Create --> Save[Salvar no Table Storage]
-    Save --> Check{Feedback crítico?<br/>nota <= 3}
+    Save --> Check{Feedback crítico?<br/>nota ≤ 3}
 
     Check -->|Não| Success1[201 Created<br/>ID retornado]
     Check -->|Sim| SendEmail[Enviar email<br/>via Mailtrap]
@@ -622,7 +622,6 @@ erDiagram
         string content "JSON do feedback"
         datetime sentAt
     }
-    
 ```
 
 ### 🔐 Diagrama de Segurança e Acesso
